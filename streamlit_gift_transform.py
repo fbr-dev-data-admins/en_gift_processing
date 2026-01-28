@@ -318,23 +318,6 @@ if check_password():
         else:
             st.error("❌ RE API not configured")
             st.caption("Add RE API credentials to secrets.toml")
-        
-        st.divider()
-        
-        # Configuration file uploads
-        st.subheader("Configuration Files")
-        
-        uploaded_mapping = st.file_uploader("Upload mapping.json", type=['json'], key='mapping_upload')
-        if uploaded_mapping:
-            mapping_config = json.load(uploaded_mapping)
-            save_json_config(mapping_path, mapping_config)
-            st.success("Mapping config updated!")
-        
-        uploaded_p2p = st.file_uploader("Upload P2P.json", type=['json'], key='p2p_upload')
-        if uploaded_p2p:
-            p2p_config = json.load(uploaded_p2p)
-            save_json_config(p2p_path, p2p_config)
-            st.success("P2P config updated!")
     
     # Main content tabs
     tab1, tab2, tab3, tab4 = st.tabs(["📥 Data Export", "🔄 Transform", "👥 P2P Matching", "📤 Final Export"])
@@ -343,11 +326,14 @@ if check_password():
     with tab1:
         st.header("Step 1: Export Data from Engaging Networks")
         
+        # Default to previous day
+        yesterday = datetime.today() - timedelta(days=1)
+        
         col1, col2 = st.columns(2)
         with col1:
-            start_date = st.date_input("Start Date", datetime.today() - timedelta(days=7))
+            start_date = st.date_input("Start Date", yesterday)
         with col2:
-            end_date = st.date_input("End Date", datetime.today())
+            end_date = st.date_input("End Date", yesterday)
         
         if st.button("🔍 Fetch EN Data", type="primary"):
             # Check for EN token
@@ -439,6 +425,10 @@ if check_password():
                     processable_mask = df['Campaign Type'].isin(valid_success_types)
                 
                 processable_df = df[processable_mask]
+                
+                # Exclude D.8., Y.8., S.8. form names (these go to exceptions)
+                excluded_forms_mask = processable_df['Campaign ID'].str.startswith(('D.8.', 'Y.8.', 'S.8.'), na=False)
+                processable_df = processable_df[~excluded_forms_mask]
                 
                 form_names = processable_df['Campaign ID'].unique()
                 fy_designation = mapping_config.get('fiscal_year_designation', '')
