@@ -1,0 +1,374 @@
+{
+  "fiscal_year_designation": "26",
+  "forms": {
+    "D.1.1 Denver Donation Page - Left Aligned": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.1.1 BBMS Denver Donation Page - Left Aligned - Multistep": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.1.1 Colorado Social Media Campaigns": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.1.1 Denver Donation Page - Left Aligned - In Memoriam": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.1.1 Denver Donation Page - Left Aligned - Multistep": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.1.1 Denver Volunteer Donation Page": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.1.1 FEED365 Donation Page": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.1.1 INTERNAL Use Donation Form": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.1.1 Website - General": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.7.1 COVID Response": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.1.1 Recurring Gift Migration - BBMS - Denver": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "S.1.1 Recurring Gift Migration - BBMS - Western Slope": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "Y.1.1 Recurring Gift Migration - BBMS - Wyoming": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.1.1 Recurring Gift Migration - iATS - Main": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "S.1.1 Recurring Gift Migration - iATS - Western Slope": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "Y.1.1 Recurring Gift Migration - iATS - Wyoming": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.1.1 Recurring Gift Migration - PayPal - Main": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "S.1.1 Recurring Gift Migration - PayPal - Western Slope": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "Y.1.1 Recurring Gift Migration - PayPal - Wyoming": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "S.1.1 INTERNAL ACH ONLY Donation Form": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "S.1.1 INTERNAL Use Donation Form": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "S.1.1 Western Slope Donation Page - Left Aligned - Multistep": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "Y.1.1 INTERNAL Use Donation Form": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "Y.1.1 Wyoming Donation Page - Left Aligned - Multistep": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.1.1 INTERNAL ACH ONLY Donation Form": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "Y.1.1 INTERNAL ACH ONLY Donation Form": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "Y.2.1 Wyoming Donation Page - Display Ads": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.1.1 ENT Match": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "Y.1.1 Wyoming In Memoriam Donation Page": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M R Evergreen Search - Colorado": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M R FY25 Fill the Pantries - DEN Mid/Major": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M R FY25 Summer Hunger - DEN": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M R FY25 Summer Hunger - DEN Mid/Major": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M+R Evergreen Lightbox Donation Form - Colorado": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M+R FY25 March Match - DEN": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M+R FY25 March Match - DEN Mid/Major": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "S.2.3 M R FY25 Fill the Pantries - WS": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "S.2.3 M+R FY25 March Match - WS": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "Y.2.3 M R Evergreen Search - Wyoming": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "Y.2.3 M R FY25 Fill the Pantries - WY": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "Y.2.3 M+R FY25 March Match - WY": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M R FY25 Fill the Pantries - DEN": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "S.2.3 M+R FY26 Summer Match - WS": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M+R FY26 Summer Match - DEN Mid/Major": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M+R FY26 Summer Match  - DEN": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M R FY26 Hunger Action Month - DEN": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M R FY26 Hunger Action Month - DEN Mid/Major": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "S.2.3 M+R FY26 Hunger Action Month - WS": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "Y.2.3 M+R FY26 Hunger Action Month - WY": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "Y.2.3 M+R Evergreen Lightbox Donation Form - WY": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "Y.2.3 M R FY26 Hunger Action Month - WY": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "S.2.3 M R FY26 Hunger Action Month - WS": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M R Evergreen Search Ads - Colorado": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "Y.2.3 M+R FY26 Thanksgiving Campaign - WY": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "S.2.3 M R FY26 Thanksgiving Campaign - WS": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M R Evergreen Display Ads - Colorado": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M R Evergreen CTV Ads - Colorado": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M R Evergreen Meta Ads - Colorado": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M+R FY26 Thanksgiving Campaign - DEN Mid/Major": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M+R FY26 Thanksgiving Campaign - DEN": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "Y.2.3 M R FY26 Thanksgiving Campaign - WY": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M R FY26 Thanksgiving Campaign - DEN Mid/Major": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 M R FY26 Thanksgiving Campaign - DEN - New Created 11.5.25": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "Y.2.3 M R FY26 December Match - WY": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 MR FY26 EOY Campaign - DEN Mid/Major": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 MR FY26 EOY Campaign - DEN": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "S.2.3 MR FY26 EOY Campaign - WS": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 MR FY26 EOY Campaign - DEN Sustainers / New Emergency Donors": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 MR FY26 Sustainer Drive - DEN": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "S.2.3 MR FY26 Sustainer Drive - WS": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "Y.2.3 MR FY26 Sustainer Drive - WY": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.3 MR FY26 Sustainer Drive - DEN Sustainers": {
+      "appeal": "WEBMR",
+      "fund": "Ind-U"
+    },
+    "D.2.1 Direct Mail (RKD) Evergreen Matching Gift Donation Page - Denver": {
+      "appeal": "WEBRKD",
+      "fund": "Ind-U"
+    },
+    "S.2.1 Direct Mail (RKD) Evergreen Matching Gift Donation Page - Western Slope": {
+      "appeal": "WEBRKD",
+      "fund": "Ind-U"
+    },
+    "Denver - Food Bank of the Rockies Virtual Food Drives": {
+      "appeal": "VFD",
+      "fund": "Events-U"
+    },
+    "Denver - P2P - Donation Page": {
+      "appeal": "VFD",
+      "fund": "Ind-U"
+    },
+    "Western Slope - P2P - Donation Page": {
+      "appeal": "VFD",
+      "fund": "Ind-U"
+    },
+    "Wyoming - P2P - Donation Page": {
+      "appeal": "VFD",
+      "fund": "Ind-U"
+    },
+    "D.3.1 Serving Up Hope Donation Page": {
+      "appeal": "SPEV",
+      "fund": "Events-U"
+    },
+    "D.2.1 Direct Mail (RKD) Capital Campaign": {
+      "appeal": "CCDEN-WEB",
+      "fund": "CCDEN-Ind-U"
+    },
+    "D.2.3 M R FY25 Capital Campaign - DEN": {
+      "appeal": "CCDEN-WEB",
+      "fund": "CCDEN-Ind-U"
+    },
+    "D.2.3 M R FY25 Capital Campaign - DEN Mid/Major": {
+      "appeal": "CCDEN-WEB",
+      "fund": "CCDEN-Ind-U"
+    },
+    "D.2.3 M R FY25 Capital Campaign Display Ads": {
+      "appeal": "CCDEN-WEB",
+      "fund": "CCDEN-Ind-U"
+    },
+    "D.2.3 M R FY25 Capital Campaign Facebook/Instagram Ads": {
+      "appeal": "CCDEN-WEB",
+      "fund": "CCDEN-Ind-U"
+    },
+    "D.2.3 M R FY25 Capital Campaign Lightbox": {
+      "appeal": "CCDEN-WEB",
+      "fund": "CCDEN-Ind-U"
+    },
+    "D.6.1 Capital Campaign Form for Volunteers": {
+      "appeal": "CCDEN-WEB",
+      "fund": "CCDEN-Ind-U"
+    },
+    "D.6.1 Capital Campaign Form General": {
+      "appeal": "CCDEN-WEB",
+      "fund": "CCDEN-Ind-U"
+    },
+    "S.3.1 KKCO Promotion Page": {
+      "appeal": "CAUSE",
+      "fund": "Promo-U"
+    },
+    "D.3.1 9Cares Promotion Page": {
+      "appeal": "9CARES",
+      "fund": "Promo-U"
+    },
+    "D.3.1 9Cares Internal Use Donation Form": {
+      "appeal": "9CARES",
+      "fund": "Promo-U"
+    }
+  },
+  "MATCH": [
+    "Example Form Name",
+    "Example Form Name 2"
+  ],
+  "_comments": {
+    "fiscal_year_designation": "This value is prepended to all appeal IDs EXCEPT those starting with 'CCDEN'",
+    "forms": "Each form name maps to an appeal ID and fund ID. Form names are the exact Campaign ID values from EN.",
+    "MATCH": "Form names listed here will have 'MATCH' as their Package value. All others will have blank Package."
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "15756": {
+    "EN Campaign Name": "Heather Spatafore",
+    "Solicitor": "25-26520"
+  },
+  "10441": {
+    "EN Campaign Name": "Lisa Steele",
+    "Solicitor": "22-24333"
+  },
+  "15652": {
+    "EN Campaign Name": "Shellie Chambers",
+    "Solicitor": "25-25254"
+  },
+  "15747": {
+    "EN Campaign Name": "Kiewit Infrastructure Engineers",
+    "Solicitor": "124515"
+  },
+  "16503": {
+    "EN Campaign Name": "Kent Place Virtual Food Drive",
+    "Solicitor": "25-34660"
+  },
+  "15818": {
+    "EN Campaign Name": "Reese Mitchell",
+    "Solicitor": "25-28047"
+  },
+  "_documentation": {
+    "description": "P2P (Peer-to-Peer) fundraising page to solicitor mapping",
+    "structure": {
+      "key": "Campaign Number from Engaging Networks (EN Campaign ID)",
+      "EN Campaign Name": "Display name of the fundraising campaign/page",
+      "Solicitor": "Raiser's Edge Constituent ID of the person who created the fundraising page"
+    },
+    "usage": [
+      "When a P2P gift comes in (Campaign Type = PFCS, PFCR, PFBS, PFBR), the system looks up the Campaign Number here",
+      "If found, it uses the EN Campaign Name for display and Solicitor for gift soft credit",
+      "If not found, the system prompts the operator to match the page creator to an RE constituent",
+      "New matches are automatically added to this file and the constituent is marked as a solicitor in RE"
+    ],
+    "notes": [
+      "Campaign Numbers are unique identifiers from Engaging Networks for each fundraising page",
+      "Solicitor IDs must be valid Raiser's Edge Constituent IDs",
+      "This file is automatically updated when new P2P matches are made through the application"
+    ]
+  }
+}
