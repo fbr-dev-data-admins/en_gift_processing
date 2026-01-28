@@ -65,7 +65,7 @@ class GiftTransformer:
         
         # Process each transformation rule
         output_df['Branch'] = df.apply(self._get_branch, axis=1)
-        output_df['EN Donation Form Name'] = df['Campaign ID'].fillna('')
+        output_df['EN Donation Form Name'] = df['Campaign ID'].fillna('') if 'Campaign ID' in df.columns else ''
         
         # Apply mapping config for Campaign, Appeal ID, Fund ID, Package
         mapping_results = df.apply(
@@ -170,19 +170,45 @@ class GiftTransformer:
         )
         
         # Address fields
-        addr1 = df.get('Address 1', df.get('Address', '')).fillna('')
-        addr2 = df.get('Address 2', '').fillna('') if 'Address 2' in df.columns else ''
+        if 'Address 1' in df.columns:
+            addr1 = df['Address 1'].fillna('')
+        elif 'Address' in df.columns:
+            addr1 = df['Address'].fillna('')
+        else:
+            addr1 = pd.Series([''] * len(df), index=df.index)
+        
+        if 'Address 2' in df.columns:
+            addr2 = df['Address 2'].fillna('')
+        else:
+            addr2 = pd.Series([''] * len(df), index=df.index)
+        
         output_df['Address'] = (addr1.astype(str) + ' ' + addr2.astype(str)).str.strip()
-        output_df['City'] = df['City'].fillna('')
-        output_df['State'] = df['State'].fillna('')
-        output_df['ZIP'] = df['ZIP'].fillna('') if 'ZIP' in df.columns else df.get('Postal Code', '').fillna('')
-        output_df['Country'] = df['Country'].apply(
-            lambda x: 'United States' if str(x).upper() == 'US' else x
-        ).fillna('')
-        output_df['E-mail'] = df['Email'].fillna('')
+        output_df['City'] = df['City'].fillna('') if 'City' in df.columns else ''
+        output_df['State'] = df['State'].fillna('') if 'State' in df.columns else ''
+        
+        if 'ZIP' in df.columns:
+            output_df['ZIP'] = df['ZIP'].fillna('')
+        elif 'Postal Code' in df.columns:
+            output_df['ZIP'] = df['Postal Code'].fillna('')
+        else:
+            output_df['ZIP'] = ''
+        
+        if 'Country' in df.columns:
+            output_df['Country'] = df['Country'].apply(
+                lambda x: 'United States' if str(x).upper() == 'US' else x
+            ).fillna('')
+        else:
+            output_df['Country'] = ''
+        
+        output_df['E-mail'] = df['Email'].fillna('') if 'Email' in df.columns else ''
         
         # Mobile phone - remove (+1)
-        output_df['Cell'] = df.get('Mobile Phone', df.get('Phone', '')).fillna('').astype(str).str.replace(r'^\(\+1\)', '', regex=True).str.strip()
+        if 'Mobile Phone' in df.columns:
+            output_df['Cell'] = df['Mobile Phone'].fillna('').astype(str).str.replace(r'^\(\+1\)', '', regex=True).str.strip()
+        elif 'Phone' in df.columns:
+            output_df['Cell'] = df['Phone'].fillna('').astype(str).str.replace(r'^\(\+1\)', '', regex=True).str.strip()
+        else:
+            output_df['Cell'] = ''
         
         # Gift Reference (from tribute matching)
         if tribute_df is not None and len(tribute_df) > 0:
