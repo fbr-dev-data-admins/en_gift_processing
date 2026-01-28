@@ -5,6 +5,8 @@ Handles authentication and bulk data export from Engaging Networks API.
 """
 
 import requests
+import csv
+import io
 from typing import List, Optional
 import time
 
@@ -21,62 +23,31 @@ def authenticate(token: str, start_date: str, end_date: str) -> List[List[str]]:
     Returns:
         List of rows (first row is headers, subsequent rows are data)
     """
-    base_url = "https://e-activist.com/ea-dataservice/export.service"
+    url = "https://us.engagingnetworks.app/ea-dataservice/export.service"
     
-    # Build the request
-    params = {
-        'token': token,
-        'startDate': start_date,
-        'endDate': end_date,
-        'type': 'csv'
+    querystring = {
+        "token": token,
+        "startDate": start_date,
+        "endDate": end_date
+    }
+    
+    headers = {
+        "Accept": "text/html; charset=UTF-8, text/xml; charset=UTF-8, text/csv; charset=UTF-8"
     }
     
     try:
-        response = requests.get(base_url, params=params, timeout=300)
+        response = requests.get(url, headers=headers, params=querystring, timeout=300)
         response.raise_for_status()
         
-        # Parse CSV response
-        lines = response.text.strip().split('\n')
-        rows = []
-        
-        for line in lines:
-            # Handle CSV parsing with potential quoted fields
-            row = parse_csv_line(line)
-            rows.append(row)
+        # Parse CSV response using csv module for proper handling
+        csv_content = io.StringIO(response.text)
+        reader = csv.reader(csv_content)
+        rows = list(reader)
         
         return rows
         
     except requests.exceptions.RequestException as e:
         raise Exception(f"EN API request failed: {e}")
-
-
-def parse_csv_line(line: str) -> List[str]:
-    """
-    Parse a CSV line handling quoted fields with commas.
-    
-    Args:
-        line: Raw CSV line
-        
-    Returns:
-        List of field values
-    """
-    fields = []
-    current_field = ""
-    in_quotes = False
-    
-    for char in line:
-        if char == '"':
-            in_quotes = not in_quotes
-        elif char == ',' and not in_quotes:
-            fields.append(current_field.strip())
-            current_field = ""
-        else:
-            current_field += char
-    
-    # Don't forget the last field
-    fields.append(current_field.strip())
-    
-    return fields
 
 
 def get_supporter_data(token: str, supporter_id: str) -> Optional[dict]:
@@ -143,7 +114,7 @@ class ENBulkAPI:
     Enhanced Engaging Networks Bulk API client with pagination and retry logic.
     """
     
-    BASE_URL = "https://e-activist.com/ea-dataservice"
+    BASE_URL = "https://us.engagingnetworks.app/ea-dataservice"
     
     def __init__(self, token: str):
         """
