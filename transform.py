@@ -114,18 +114,32 @@ class GiftTransformer:
         output_df['Gift Solicitor'] = p2p_fields[4]
         
         # Direct field mappings
-        output_df['EN Transaction ID'] = df['EN Transaction ID'].fillna('')
-        output_df['Gift Amount'] = df['Campaign Data 4'].fillna('')
-        output_df['Gift Date'] = df['Campaign Date'].fillna('')
-        output_df['GL Post Date'] = df['Campaign Date'].fillna('')
-        output_df['Stripe Transaction ID'] = df['Campaign Data 2'].fillna('')
-        output_df['Engaging Networks ID'] = df['Supporter ID'].fillna('')
-        output_df['Org Name'] = df.get('Company/Org Name', df.get('Company Name', '')).fillna('')
-        output_df['Constituent ID'] = df.get('Raisers Edge Constituent ID', df.get('RE Constituent ID', '')).fillna('')
-        output_df['First Name'] = df['First Name'].fillna('')
-        output_df['Nickname'] = df['First Name'].fillna('')
-        output_df['Middle Name'] = df.get('Middle Name', '').fillna('') if 'Middle Name' in df.columns else ''
-        output_df['Last Name'] = df['Last Name'].fillna('')
+        output_df['EN Transaction ID'] = df['EN Transaction ID'].fillna('') if 'EN Transaction ID' in df.columns else ''
+        output_df['Gift Amount'] = df['Campaign Data 4'].fillna('') if 'Campaign Data 4' in df.columns else ''
+        output_df['Gift Date'] = df['Campaign Date'].fillna('') if 'Campaign Date' in df.columns else ''
+        output_df['GL Post Date'] = df['Campaign Date'].fillna('') if 'Campaign Date' in df.columns else ''
+        output_df['Stripe Transaction ID'] = df['Campaign Data 2'].fillna('') if 'Campaign Data 2' in df.columns else ''
+        output_df['Engaging Networks ID'] = df['Supporter ID'].fillna('') if 'Supporter ID' in df.columns else ''
+        
+        # Handle columns that might have different names
+        if 'Company/Org Name' in df.columns:
+            output_df['Org Name'] = df['Company/Org Name'].fillna('')
+        elif 'Company Name' in df.columns:
+            output_df['Org Name'] = df['Company Name'].fillna('')
+        else:
+            output_df['Org Name'] = ''
+        
+        if 'Raisers Edge Constituent ID' in df.columns:
+            output_df['Constituent ID'] = df['Raisers Edge Constituent ID'].fillna('')
+        elif 'RE Constituent ID' in df.columns:
+            output_df['Constituent ID'] = df['RE Constituent ID'].fillna('')
+        else:
+            output_df['Constituent ID'] = ''
+        
+        output_df['First Name'] = df['First Name'].fillna('') if 'First Name' in df.columns else ''
+        output_df['Nickname'] = df['First Name'].fillna('') if 'First Name' in df.columns else ''
+        output_df['Middle Name'] = df['Middle Name'].fillna('') if 'Middle Name' in df.columns else ''
+        output_df['Last Name'] = df['Last Name'].fillna('') if 'Last Name' in df.columns else ''
         
         # Spouse name parsing
         spouse_fields = df.apply(
@@ -228,10 +242,30 @@ class GiftTransformer:
                 'EN Transaction ID': df.loc[idx, 'EN Transaction ID'],
                 'Campaign Type': df.loc[idx, 'Campaign Type'],
                 'Campaign Status': df.loc[idx, 'Campaign Status'],
+                'Campaign ID': df.loc[idx, 'Campaign ID'] if 'Campaign ID' in df.columns else '',
                 'Reason': 'Rejected or Changed Status'
             })
         
-        return df[valid_mask].copy()
+        # Filter to valid records first
+        filtered_df = df[valid_mask].copy()
+        
+        # Now filter out form names starting with D.8., Y.8., or S.8. and add to exceptions
+        if 'Campaign ID' in filtered_df.columns:
+            excluded_form_mask = filtered_df['Campaign ID'].str.startswith(('D.8.', 'Y.8.', 'S.8.'), na=False)
+            
+            for idx in filtered_df[excluded_form_mask].index:
+                self.exceptions.append({
+                    'EN Transaction ID': filtered_df.loc[idx, 'EN Transaction ID'] if 'EN Transaction ID' in filtered_df.columns else '',
+                    'Campaign Type': filtered_df.loc[idx, 'Campaign Type'],
+                    'Campaign Status': filtered_df.loc[idx, 'Campaign Status'],
+                    'Campaign ID': filtered_df.loc[idx, 'Campaign ID'],
+                    'Reason': 'Excluded Form Name (D.8./Y.8./S.8.)'
+                })
+            
+            # Remove excluded forms from the filtered dataframe
+            filtered_df = filtered_df[~excluded_form_mask].copy()
+        
+        return filtered_df
     
     def _get_branch(self, row: pd.Series) -> str:
         """Determine branch from Campaign ID prefix"""
