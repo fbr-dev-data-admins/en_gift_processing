@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import requests
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from io import BytesIO
@@ -14,6 +15,40 @@ from openpyxl.utils import get_column_letter
 from en_api import authenticate as en_authenticate
 from re_skyapi import RESkyAPI
 from transform import GiftTransformer
+
+# ---------- GITHUB CONFIG LOADING ----------
+def load_config_from_github(repo_url: str, file_path: str) -> dict:
+    """
+    Load JSON config file from GitHub repository.
+    
+    Args:
+        repo_url: GitHub repo URL (e.g., "https://github.com/username/repo")
+        file_path: Path to file within repo (e.g., "config/mapping.json")
+    
+    Returns:
+        Parsed JSON as dictionary
+    """
+    # Convert GitHub URL to raw content URL
+    # Handle both formats: github.com and raw.githubusercontent.com
+    if "github.com" in repo_url:
+        # Extract owner/repo from URL
+        parts = repo_url.rstrip('/').split('/')
+        owner = parts[-2]
+        repo = parts[-1].replace('.git', '')
+        raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/main/{file_path}"
+    else:
+        raw_url = repo_url
+    
+    try:
+        response = requests.get(raw_url, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.warning(f"Could not load {file_path} from GitHub: {e}")
+        return {}
+    except json.JSONDecodeError as e:
+        st.warning(f"Invalid JSON in {file_path}: {e}")
+        return {}
 
 # ---------- PASSWORD PROTECTION ----------
 def check_password():
@@ -214,12 +249,33 @@ if check_password():
     mapping_path = "config/mapping.json"
     p2p_path = "config/P2P.json"
     
-    mapping_config = load_json_config(mapping_path)
-    p2p_config = load_json_config(p2p_path)
+    # Check for GitHub repo configuration
+    github_repo = st.secrets.get("github", {}).get("config_repo", "")
+    
+    if github_repo:
+        # Load from GitHub
+        if 'mapping_config' not in st.session_state or st.sidebar.button("🔄 Reload GitHub Configs"):
+            st.session_state.mapping_config = load_config_from_github(github_repo, "config/mapping.json")
+            st.session_state.p2p_config = load_config_from_github(github_repo, "config/P2P.json")
+        mapping_config = st.session_state.get('mapping_config', {})
+        p2p_config = st.session_state.get('p2p_config', {})
+    else:
+        # Load from local files
+        mapping_config = load_json_config(mapping_path)
+        p2p_config = load_json_config(p2p_path)
     
     # Sidebar for configuration
     with st.sidebar:
         st.header("⚙️ Configuration")
+        
+        # Config source indicator
+        if github_repo:
+            st.success(f"📂 Configs from GitHub")
+            st.caption(github_repo)
+        else:
+            st.info("📂 Configs from local files")
+        
+        st.divider()
         
         # RE API Authentication Status
         st.subheader("RE Sky API Status")
@@ -228,16 +284,40 @@ if check_password():
                 st.success("✅ Authenticated")
             else:
                 st.warning("⚠️ Not authenticated")
-                if st.button("Authenticate with RE"):
+                
+                # Step 1: Get authorization URL
+                if st.button("🔑 Get Authorization URL"):
                     auth_url = st.session_state.re_api.get_authorization_url()
-                    st.write(f"[Click here to authorize]({auth_url})")
-                    auth_code = st.text_input("Enter authorization code:")
-                    if auth_code:
-                        if st.session_state.re_api.exchange_code_for_token(auth_code):
-                            st.success("Authentication successful!")
-                            st.rerun()
+                    st.session_state.re_auth_url = auth_url
+                
+                # Show authorization URL if available
+                if 're_auth_url' in st.session_state:
+                    st.markdown(f"**Step 1:** [Click here to authorize]({st.session_state.re_auth_url})")
+                    st.markdown("**Step 2:** After authorizing, copy the code from the URL")
+                    
+                    # Step 2: Enter authorization code
+                    auth_code = st.text_input(
+                        "Authorization Code:",
+                        key="re_auth_code",
+                        placeholder="Paste the code here"
+                    )
+                    st.caption("Press the button below after pasting the code")
+                    
+                    # Step 3: Submit button
+                    if st.button("✅ Submit Authorization Code"):
+                        if auth_code:
+                            with st.spinner("Exchanging code for token..."):
+                                if st.session_state.re_api.exchange_code_for_token(auth_code):
+                                    st.success("🎉 Authentication successful!")
+                                    del st.session_state.re_auth_url
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Failed to authenticate. Check the code and try again.")
+                        else:
+                            st.error("Please enter the authorization code first.")
         else:
             st.error("❌ RE API not configured")
+            st.caption("Add RE API credentials to secrets.toml")
         
         st.divider()
         
@@ -270,21 +350,33 @@ if check_password():
             end_date = st.date_input("End Date", datetime.today())
         
         if st.button("🔍 Fetch EN Data", type="primary"):
-            with st.spinner("Fetching data from Engaging Networks..."):
-                try:
-                    token = st.secrets["en_api"]["token"]
-                    start_str = start_date.strftime("%m%d%Y")
-                    end_str = end_date.strftime("%m%d%Y")
-                    
-                    rows = en_authenticate(token, start_str, end_str)
-                    df = pd.DataFrame(rows[1:], columns=rows[0])
-                    
-                    st.session_state.raw_df = df
-                    st.success(f"✅ Retrieved {len(df)} records!")
-                    st.dataframe(df.head(20))
-                    
-                except Exception as e:
-                    st.error(f"Error fetching data: {e}")
+            # Check for EN token
+            try:
+                token = st.secrets["en_api"]["token"]
+            except KeyError:
+                st.error("❌ EN API token not found in secrets. Please add [en_api] section with 'token' to your secrets.toml")
+                token = None
+            
+            if token:
+                with st.spinner("Fetching data from Engaging Networks..."):
+                    try:
+                        start_str = start_date.strftime("%m%d%Y")
+                        end_str = end_date.strftime("%m%d%Y")
+                        
+                        rows = en_authenticate(token, start_str, end_str)
+                        
+                        if isinstance(rows, pd.DataFrame):
+                            df = rows
+                        else:
+                            df = pd.DataFrame(rows[1:], columns=rows[0])
+                        
+                        st.session_state.raw_df = df
+                        st.success(f"✅ Retrieved {len(df)} records!")
+                        st.dataframe(df.head(20))
+                        
+                    except Exception as e:
+                        st.error(f"Error fetching data: {e}")
+                        st.info("💡 Make sure your EN API token is correct and has bulk export permissions.")
         
         # Alternative: Upload CSV
         st.divider()
