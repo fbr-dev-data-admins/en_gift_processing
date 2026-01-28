@@ -422,8 +422,25 @@ if check_password():
                     st.metric("Successful Transactions", success_count)
             
             # Check for missing form names in mapping
-            if 'Campaign ID' in df.columns and mapping_config:
-                form_names = df['Campaign ID'].unique()
+            # Only check form names for campaign types that will be processed
+            if 'Campaign ID' in df.columns and 'Campaign Type' in df.columns and mapping_config:
+                # Define valid campaign types (same as in transform.py)
+                valid_success_types = ['FCS', 'FBS', 'FCR', 'FBR', 'PFCS', 'PFBS', 'PFCR', 'PFBR']
+                valid_pending_types = ['FBS', 'FBR', 'PFBS', 'PFBR']
+                
+                # Filter to only records that will be processed
+                if 'Campaign Status' in df.columns:
+                    processable_mask = (
+                        (df['Campaign Type'].isin(valid_success_types) & (df['Campaign Status'] == 'success')) |
+                        (df['Campaign Type'].isin(valid_pending_types) & (df['Campaign Status'] == 'pending'))
+                    )
+                else:
+                    # If no status column, just filter by campaign type
+                    processable_mask = df['Campaign Type'].isin(valid_success_types)
+                
+                processable_df = df[processable_mask]
+                
+                form_names = processable_df['Campaign ID'].unique()
                 fy_designation = mapping_config.get('fiscal_year_designation', '')
                 forms = mapping_config.get('forms', {})
                 missing_forms = [f for f in form_names if f not in forms and pd.notna(f)]
