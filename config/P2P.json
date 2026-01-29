@@ -23,6 +23,10 @@
     "EN Campaign Name": "Reese Mitchell",
     "Solicitor": "25-28047"
   },
+  "15830": {
+    "EN Campaign Name": "Denver Water",
+    "Solicitor": "45826"
+  },
   "_documentation": {
     "description": "P2P (Peer-to-Peer) fundraising page to solicitor mapping",
     "structure": {
