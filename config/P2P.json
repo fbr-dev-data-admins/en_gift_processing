@@ -27,6 +27,50 @@
     "EN Campaign Name": "Denver Water",
     "Solicitor": "45826"
   },
+    "10775": {
+    "EN Campaign Name": "Edwin Carey",
+    "Solicitor": "23-527"
+  },
+    "16879": {
+    "EN Campaign Name": "Carrie Tolzien",
+    "Solicitor": "122831"
+  },
+    "10774": {
+    "EN Campaign Name": "Joel Chirhart",
+    "Solicitor": "22-7523"
+  },
+    "10683": {
+    "EN Campaign Name": "Kyle Harrigan",
+    "Solicitor": "22-1273"
+  },
+    "16875": {
+    "EN Campaign Name": "Kyle Harrigan",
+    "Solicitor": "22-1273"
+  },
+    "16420": {
+    "EN Campaign Name": "Daniel Brown",
+    "Solicitor": "89558"
+  },
+    "15473": {
+    "EN Campaign Name": "The One And Only Jon Ham",
+    "Solicitor": "22-20739"
+  },
+    "16769": {
+    "EN Campaign Name": "Pottery Brothers",
+    "Solicitor": "26-38518"
+  },
+    "16198": {
+    "EN Campaign Name": "2025 Rocky Mountain ISPE Chapter ",
+    "Solicitor": "26-38520"
+  },
+    "16169": {
+    "EN Campaign Name": "Kellie Alkayam",
+    "Solicitor": "26-38522"
+  },
+    "": {
+    "EN Campaign Name": "",
+    "Solicitor": ""
+  },
   "_documentation": {
     "description": "P2P (Peer-to-Peer) fundraising page to solicitor mapping",
     "structure": {
