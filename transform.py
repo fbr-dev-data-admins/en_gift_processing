@@ -586,14 +586,23 @@ class GiftTransformer:
                     debug_entry['Target Dates'] = [f"{prev_year}-{prev_month:02d}-{d:02d}" for d in days_to_check]
                     
                     # Call RE API to get gifts
-                    gifts_found = re_api.get_constituent_gifts(
+                    gifts_found, api_debug = re_api.get_constituent_gifts(
                         constituent_id=re_system_id,
                         year=prev_year,
                         month=prev_month,
                         days=days_to_check
                     )
                     
-                    debug_entry['RE API Response'] = gifts_found if gifts_found else 'Empty or error'
+                    # Add API debug info
+                    debug_entry['API Endpoint'] = api_debug.get('endpoint', '')
+                    debug_entry['API Params'] = str(api_debug.get('params', {}))
+                    debug_entry['API Status'] = api_debug.get('response_status', '')
+                    debug_entry['API Gifts Count'] = api_debug.get('gifts_count', 0)
+                    debug_entry['API Filtered Count'] = api_debug.get('filtered_count', 'N/A')
+                    if api_debug.get('error'):
+                        debug_entry['API Error'] = api_debug.get('error')
+                    
+                    debug_entry['RE API Response'] = gifts_found if gifts_found else 'Empty'
                     
                     if gifts_found and len(gifts_found) > 0:
                         # Format: "date - $amount" with line breaks
