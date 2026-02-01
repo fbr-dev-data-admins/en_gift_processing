@@ -9,7 +9,7 @@ import requests
 import json
 import os
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Tuple
 from urllib.parse import urlencode
 
 
@@ -316,12 +316,12 @@ class RESkyAPI:
         year: int = None,
         month: int = None,
         days: List[int] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """
-        Get gifts for a constituent, filtered by gift date (not date_added).
+        Get gifts for a constituent, filtered by gift date.
         
         Args:
-            constituent_id: RE Constituent ID (could be lookup ID or system record ID)
+            constituent_id: RE Constituent ID (lookup ID)
             gift_date: Specific date to filter gifts
             date_range_days: Number of days around gift_date to include
             year: Year to filter (used with month/days)
@@ -329,43 +329,63 @@ class RESkyAPI:
             days: List of days of month to check (used with year/month)
             
         Returns:
-            List of gifts with 'date' and 'amount' keys
+            Tuple of (list of gifts with 'date' and 'amount' keys, debug_info dict)
         """
-        # Fetch all gifts for constituent - we'll filter by gift date in Python
-        params = {'limit': 500}
-        result = None
+        debug_info = {
+            'endpoint': None,
+            'params': None,
+            'response_status': None,
+            'raw_response': None,
+            'error': None
+        }
         
-        # First try using the ID directly as a system record ID
+        # Build params for the gifts endpoint
+        # Use /gift/v1/gifts with constituent_id, start_gift_date, end_gift_date
+        params = {
+            'constituent_id': constituent_id,
+            'limit': 500
+        }
+        
+        # Calculate date range
+        if year and month and days:
+            # For specific days, we need to query the range that covers all days
+            min_day = min(days)
+            max_day = max(days)
+            start_date = f"{year}-{month:02d}-{min_day:02d}"
+            end_date = f"{year}-{month:02d}-{max_day:02d}"
+            params['start_gift_date'] = start_date
+            params['end_gift_date'] = end_date
+            target_dates = [f"{year}-{month:02d}-{d:02d}" for d in days]
+        elif gift_date:
+            start = gift_date - timedelta(days=date_range_days)
+            end = gift_date + timedelta(days=date_range_days)
+            params['start_gift_date'] = start.strftime('%Y-%m-%d')
+            params['end_gift_date'] = end.strftime('%Y-%m-%d')
+            target_dates = None
+        else:
+            target_dates = None
+        
+        debug_info['endpoint'] = '/gift/v1/gifts'
+        debug_info['params'] = params
+        
         try:
             result = self._make_request(
                 'GET', 
-                f'/gift/v1/constituents/{constituent_id}/gifts',
+                '/gift/v1/gifts',
                 params=params
             )
+            debug_info['response_status'] = 'success'
+            debug_info['raw_response'] = result
         except Exception as e:
-            # If we get a 404, try looking up by lookup_id instead
-            if '404' in str(e):
-                try:
-                    constituent = self.get_constituent_by_lookup_id(constituent_id)
-                    if constituent and constituent.get('id'):
-                        system_record_id = constituent.get('id')
-                        result = self._make_request(
-                            'GET', 
-                            f'/gift/v1/constituents/{system_record_id}/gifts',
-                            params=params
-                        )
-                except:
-                    pass
-            
-            # If still no result, return empty list
-            if not result:
-                return []
+            debug_info['response_status'] = 'error'
+            debug_info['error'] = str(e)
+            return [], debug_info
         
         gifts = result.get('value', []) if result else []
+        debug_info['gifts_count'] = len(gifts)
         
         # Filter by specific days if year/month/days provided
         if year and month and days and gifts:
-            target_dates = [f"{year}-{month:02d}-{d:02d}" for d in days]
             filtered_gifts = []
             for g in gifts:
                 gift_date_str = g.get('date', '')[:10] if g.get('date') else ''
@@ -378,7 +398,8 @@ class RESkyAPI:
                         'date': gift_date_str,
                         'amount': g.get('amount', {}).get('value', 0) if g.get('amount') else 0
                     })
-            return filtered_gifts
+            debug_info['filtered_count'] = len(filtered_gifts)
+            return filtered_gifts, debug_info
         
         # Filter by exact date if specified
         if gift_date and gifts:
@@ -394,9 +415,10 @@ class RESkyAPI:
                         })
                 except:
                     pass
-            return filtered
+            debug_info['filtered_count'] = len(filtered)
+            return filtered, debug_info
         
-        return gifts
+        return gifts, debug_info
     
     def get_gift(self, gift_id: str) -> Optional[Dict[str, Any]]:
         """
