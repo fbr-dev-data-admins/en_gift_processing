@@ -312,7 +312,10 @@ class RESkyAPI:
         self, 
         constituent_id: str,
         gift_date: datetime = None,
-        date_range_days: int = 1
+        date_range_days: int = 1,
+        year: int = None,
+        month: int = None,
+        days: List[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Get gifts for a constituent, optionally filtered by date.
@@ -321,13 +324,24 @@ class RESkyAPI:
             constituent_id: RE Constituent ID
             gift_date: Specific date to filter gifts
             date_range_days: Number of days around gift_date to include
+            year: Year to filter (used with month/days)
+            month: Month to filter (used with year/days)
+            days: List of days of month to check (used with year/month)
             
         Returns:
-            List of gifts
+            List of gifts with 'date' and 'amount' keys
         """
         params = {'limit': 500}
         
-        if gift_date:
+        # If year/month/days provided, construct date range
+        if year and month and days:
+            # Get gifts for the entire month, then filter
+            import calendar
+            days_in_month = calendar.monthrange(year, month)[1]
+            start_date = f"{year}-{month:02d}-01"
+            end_date = f"{year}-{month:02d}-{days_in_month:02d}"
+            params['date_added'] = f"gte {start_date}"
+        elif gift_date:
             start_date = gift_date - timedelta(days=date_range_days)
             end_date = gift_date + timedelta(days=date_range_days)
             params['date_added'] = f"gte {start_date.strftime('%Y-%m-%d')}"
@@ -340,11 +354,28 @@ class RESkyAPI:
         
         gifts = result.get('value', []) if result else []
         
+        # Filter by specific days if year/month/days provided
+        if year and month and days and gifts:
+            target_dates = [f"{year}-{month:02d}-{d:02d}" for d in days]
+            filtered_gifts = []
+            for g in gifts:
+                gift_date_str = g.get('date', '')[:10]
+                if gift_date_str in target_dates:
+                    # Exclude soft credits (check gift type)
+                    gift_type = g.get('type', '')
+                    if 'soft' not in gift_type.lower():
+                        filtered_gifts.append({
+                            'date': gift_date_str,
+                            'amount': g.get('amount', {}).get('value', 0)
+                        })
+            return filtered_gifts
+        
         # Filter by exact date if specified
         if gift_date and gifts:
             target_date = gift_date.date()
             gifts = [
-                g for g in gifts 
+                {'date': g.get('date', '')[:10], 'amount': g.get('amount', {}).get('value', 0)}
+                for g in gifts 
                 if datetime.fromisoformat(g.get('date', '')[:10]).date() == target_date
             ]
         
