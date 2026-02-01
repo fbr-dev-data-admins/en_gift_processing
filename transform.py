@@ -34,6 +34,7 @@ class GiftTransformer:
     def __init__(self):
         self.exceptions = []
         self.p2p_pending = []
+        self.debug_log = []  # For debugging RE API calls
     
     def transform(
         self,
@@ -51,6 +52,7 @@ class GiftTransformer:
         """
         self.exceptions = []
         self.p2p_pending = []
+        self.debug_log = []  # Reset debug log
         
         # Create a copy to avoid modifying original
         df = df.copy()
@@ -212,7 +214,17 @@ class GiftTransformer:
         
         output_df['City'] = self._safe_column(df, 'City')
         output_df['State'] = self._safe_column(df, 'State')
-        output_df['ZIP'] = self._safe_column(df, 'ZIP', fallback_col='Postal Code')
+        
+        # ZIP: Try multiple possible column names from EN
+        zip_col = None
+        for col_name in ['ZIP', 'Zip', 'zip', 'Postal Code', 'PostalCode', 'Zip Code', 'ZipCode']:
+            if col_name in df.columns:
+                zip_col = col_name
+                break
+        if zip_col:
+            output_df['ZIP'] = df[zip_col].fillna('').astype(str).str.strip()
+        else:
+            output_df['ZIP'] = ''
         
         # Country: "US" becomes "United States"
         if 'Country' in df.columns:
@@ -224,18 +236,19 @@ class GiftTransformer:
         
         # E-mail: Try multiple possible column names from EN
         email_col = None
-        for col_name in ['Email', 'E-mail', 'Supporter Email', 'Email Address', 'email']:
+        for col_name in ['Email', 'E-mail', 'Supporter Email', 'Email Address', 'email', 'EmailAddress']:
             if col_name in df.columns:
                 email_col = col_name
                 break
         if email_col:
-            output_df['E-mail'] = df[email_col].fillna('')
+            output_df['E-mail'] = df[email_col].fillna('').astype(str).str.strip()
         else:
             output_df['E-mail'] = ''
         
         # Cell: Mobile Phone with (+1) removed - try multiple column names
+        # Per doc: Mobile Phone -> Cell, remove (+1)
         cell_col = None
-        for col_name in ['Mobile Phone', 'Cell Phone', 'Cell', 'Mobile', 'Phone', 'phone']:
+        for col_name in ['Mobile Phone', 'MobilePhone', 'Cell Phone', 'CellPhone', 'Cell', 'Mobile', 'Phone', 'phone', 'Telephone']:
             if col_name in df.columns:
                 cell_col = col_name
                 break
@@ -459,16 +472,32 @@ class GiftTransformer:
             payment_method = ''
         
         # Check if this is a NEW recurring gift (Campaign Data 16 date = Campaign Date)
-        # Compare just the day of month since recurring gifts process on same day each month
         is_new_recurring = False
         if campaign_date is not None and data_16_date is not None:
-            # Compare full dates - if the start date matches the gift date, it's a new recurring
             try:
                 cd_date = campaign_date.date() if hasattr(campaign_date, 'date') else campaign_date
                 d16_date = data_16_date.date() if hasattr(data_16_date, 'date') else data_16_date
                 is_new_recurring = (cd_date == d16_date)
             except:
                 pass
+        
+        # Debug log entry
+        en_txn_id = str(row.get('EN Transaction ID', ''))
+        re_system_id = str(row.get('System Record ID', row.get('RE System Record ID', ''))).strip()
+        
+        debug_entry = {
+            'EN Transaction ID': en_txn_id,
+            'Campaign Type': campaign_type,
+            'Campaign Date': campaign_date_str,
+            'Campaign Data 16': data_16_str,
+            'Parsed Campaign Date': str(campaign_date) if campaign_date else 'PARSE FAILED',
+            'Parsed Data 16': str(data_16_date) if data_16_date else 'PARSE FAILED',
+            'Is New Recurring': is_new_recurring,
+            'RE System Record ID': re_system_id,
+            'RE API Called': False,
+            'RE API Response': None,
+            'Gifts Last Month Result': ''
+        }
         
         if is_new_recurring and campaign_date is not None:
             # New recurring gift - populate all monthly donor fields
@@ -479,6 +508,7 @@ class GiftTransformer:
             statement_type = 'Emailed'
             channel = 'Digital -- Recurring'
             gifts_last_month = ''
+            debug_entry['Gifts Last Month Result'] = '(New recurring - no lookup needed)'
         else:
             # Existing recurring gift - need to look up previous month's gifts
             status = ''
@@ -488,6 +518,75 @@ class GiftTransformer:
             statement_type = ''
             channel = ''
             gifts_last_month = 'CHECK'  # Default to CHECK
+            
+            # Try to call RE API if available and we have a RE System Record ID
+            if re_api and re_api.is_authenticated() and re_system_id and re_system_id != 'nan' and campaign_date is not None:
+                debug_entry['RE API Called'] = True
+                try:
+                    # Calculate the day to look for in previous month
+                    gift_day = campaign_date.day
+                    
+                    # Get previous month
+                    if campaign_date.month == 1:
+                        prev_month = 12
+                        prev_year = campaign_date.year - 1
+                    else:
+                        prev_month = campaign_date.month - 1
+                        prev_year = campaign_date.year
+                    
+                    # Handle end of month (31st -> 30th/28th/29th)
+                    import calendar
+                    days_in_prev_month = calendar.monthrange(prev_year, prev_month)[1]
+                    
+                    # Days to check (for end of month handling)
+                    days_to_check = [min(gift_day, days_in_prev_month)]
+                    if gift_day >= 28:
+                        # Also check 28th and 29th for Feb edge cases
+                        days_to_check = list(set([min(gift_day, days_in_prev_month), 28, 29, 30, 31]))
+                        days_to_check = [d for d in days_to_check if d <= days_in_prev_month]
+                    
+                    debug_entry['Days to Check'] = days_to_check
+                    debug_entry['Previous Month/Year'] = f"{prev_month}/{prev_year}"
+                    
+                    # Call RE API to get gifts
+                    gifts_found = re_api.get_constituent_gifts(
+                        constituent_id=re_system_id,
+                        year=prev_year,
+                        month=prev_month,
+                        days=days_to_check
+                    )
+                    
+                    debug_entry['RE API Response'] = gifts_found
+                    
+                    if gifts_found and len(gifts_found) > 0:
+                        # Format: "date - $amount" with line breaks
+                        gift_strings = []
+                        for gift in gifts_found:
+                            gift_date = gift.get('date', '')
+                            gift_amount = gift.get('amount', '')
+                            gift_strings.append(f"{gift_date} - ${gift_amount}")
+                        gifts_last_month = '\n'.join(gift_strings)
+                        debug_entry['Gifts Last Month Result'] = f"Found {len(gifts_found)} gifts"
+                    else:
+                        gifts_last_month = 'CHECK'
+                        debug_entry['Gifts Last Month Result'] = 'No gifts found - CHECK'
+                        
+                except Exception as e:
+                    debug_entry['RE API Response'] = f"ERROR: {str(e)}"
+                    debug_entry['Gifts Last Month Result'] = f'API Error - CHECK'
+                    gifts_last_month = 'CHECK'
+            else:
+                # Log why we didn't call the API
+                if not re_api:
+                    debug_entry['Gifts Last Month Result'] = 'No RE API configured - CHECK'
+                elif not re_api.is_authenticated():
+                    debug_entry['Gifts Last Month Result'] = 'RE API not authenticated - CHECK'
+                elif not re_system_id or re_system_id == 'nan':
+                    debug_entry['Gifts Last Month Result'] = 'No RE System Record ID - CHECK'
+                elif campaign_date is None:
+                    debug_entry['Gifts Last Month Result'] = 'Campaign Date parse failed - CHECK'
+        
+        self.debug_log.append(debug_entry)
         
         return (status, status_date, anniversary_desc, anniversary_date, 
                 statement_type, channel, payment_method, region, gifts_last_month)
