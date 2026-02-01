@@ -363,7 +363,7 @@ if check_password():
             st.caption("Add RE API credentials to secrets.toml")
     
     # Main content tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["📥 Data Export", "🔄 Transform", "👥 P2P Matching", "📤 Final Export"])
+    tab1, tab2, tab3 = st.tabs(["📥 Data Export", "🔄 Transform", "👥 P2P Matching"])
     
     # ---------- TAB 1: DATA EXPORT ----------
     with tab1:
@@ -523,12 +523,14 @@ if check_password():
                             df=df,
                             mapping_config=mapping_config,
                             p2p_config=p2p_config,
-                            tribute_df=tribute_df
+                            tribute_df=tribute_df,
+                            re_api=st.session_state.re_api
                         )
                         
                         st.session_state.processed_df = processed_df
                         st.session_state.exceptions_df = exceptions_df
                         st.session_state.p2p_pending = p2p_pending
+                        st.session_state.debug_log = transformer.debug_log  # Store debug log
                         
                         st.success(f"✅ Transformation complete!")
                         
@@ -546,10 +548,57 @@ if check_password():
                             with st.expander("View Exceptions"):
                                 st.dataframe(exceptions_df)
                         
+                        # Show debug log for RE API calls (Gifts Last Month)
+                        if transformer.debug_log:
+                            with st.expander("🔍 Debug Log - Recurring Gift Lookups"):
+                                st.write(f"Total recurring gift records processed: {len(transformer.debug_log)}")
+                                debug_df = pd.DataFrame(transformer.debug_log)
+                                st.dataframe(debug_df)
+                        
                     except Exception as e:
                         st.error(f"Transformation error: {e}")
                         import traceback
                         st.code(traceback.format_exc())
+            
+            # Show input column names for debugging
+            with st.expander("📋 Input Data Column Names"):
+                st.write("Available columns in input data:")
+                st.write(list(st.session_state.raw_df.columns))
+            
+            # Export section
+            st.divider()
+            st.subheader("📤 Export Working File")
+            
+            if st.session_state.processed_df is not None and len(st.session_state.processed_df) > 0:
+                st.warning("⚠️ **Important:** Download the working file below, then use the VBA macro (GiftImportProcessor.bas) to complete final processing before RE import.")
+                st.info("""
+                **VBA Macro Steps:**
+                1. Open the downloaded Excel file
+                2. Press Alt+F11 to open VBA Editor
+                3. File → Import File → Select GiftImportProcessor.bas
+                4. Close VBA Editor and Save As .xlsm
+                5. Run macro: Alt+F8 → ProcessGiftImport → Run
+                
+                The macro will:
+                - Validate Key Indicator = "O" records have RE Constituent ID
+                - Clear personal info for organization records
+                - Remove working columns
+                - Export final import file
+                """)
+                
+                if st.button("📊 Generate Working Excel", type="primary"):
+                    excel_buffer = create_excel_output(
+                        st.session_state.processed_df, 
+                        st.session_state.exceptions_df
+                    )
+                    st.download_button(
+                        label="📥 Download Working File",
+                        data=excel_buffer,
+                        file_name=f"EN_Gift_Transform_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+            else:
+                st.info("Run transformation first to enable export.")
     
     # ---------- TAB 3: P2P MATCHING ----------
     with tab3:
@@ -614,77 +663,3 @@ if check_password():
                                 st.session_state.p2p_pending.pop(i)
                                 st.success("Manual match saved!")
                                 st.rerun()
-    
-    # ---------- TAB 4: FINAL EXPORT ----------
-    with tab4:
-        st.header("Step 4: Export Final Files")
-        
-        if st.session_state.processed_df is None:
-            st.warning("⚠️ Please complete transformation in Step 2 first.")
-        else:
-            df = st.session_state.processed_df.copy()
-            
-            st.subheader("Preview")
-            st.dataframe(df.head(10))
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("Working File (with formatting)")
-                if st.button("📊 Generate Working Excel", type="primary"):
-                    excel_buffer = create_excel_output(df, st.session_state.exceptions_df)
-                    st.download_button(
-                        label="📥 Download Working File",
-                        data=excel_buffer,
-                        file_name=f"EN_Gift_Transform_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-            
-            with col2:
-                st.subheader("Final Import File")
-                
-                # Process for final export
-                st.write("Before export, verify:")
-                st.write("- All Key Indicator = 'O' records have RE Constituent ID")
-                st.write("- Review highlighted cells for issues")
-                
-                if st.button("🚀 Generate Final Import", type="primary"):
-                    # Check for missing RE IDs where Key Indicator = O
-                    if 'Key Indicator' in df.columns:
-                        missing_ids = df[(df['Key Indicator'] == 'O') & 
-                                        (df['Constituent ID'].isna() | (df['Constituent ID'] == ''))]
-                        
-                        if len(missing_ids) > 0:
-                            st.error(f"❌ {len(missing_ids)} records with Key Indicator = 'O' are missing RE Constituent ID")
-                            st.dataframe(missing_ids[['EN Transaction ID', 'Key Indicator', 'Constituent ID']])
-                        else:
-                            # Clear personal info for Key Indicator = O
-                            clear_cols = ['First Name', 'Nickname', 'Middle Name', 'Last Name',
-                                        'Spouse First Name', 'Spouse Nickname', 'Spouse Middle Name', 
-                                        'Spouse Last Name', 'Addressee', 'Salutation', 
-                                        'Spouse Addressee', 'Spouse Salutation', 'E-mail', 'Cell']
-                            
-                            for col in clear_cols:
-                                if col in df.columns:
-                                    df.loc[df['Key Indicator'] == 'O', col] = ''
-                            
-                            # Remove working columns
-                            remove_cols = ['Org Name', 'Key Indicator', 'Gifts Last Month']
-                            df_final = df.drop(columns=[c for c in remove_cols if c in df.columns])
-                            
-                            final_buffer = create_final_import_file(df_final)
-                            st.download_button(
-                                label="📥 Download Final Import File",
-                                data=final_buffer,
-                                file_name=f"EN_Gift_Import_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                            )
-                            st.success("✅ Final import file generated!")
-                    else:
-                        final_buffer = create_final_import_file(df)
-                        st.download_button(
-                            label="📥 Download Final Import File",
-                            data=final_buffer,
-                            file_name=f"EN_Gift_Import_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
