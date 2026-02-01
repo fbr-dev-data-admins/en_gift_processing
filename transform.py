@@ -20,7 +20,8 @@ class GiftTransformer:
     VALID_SUCCESS_TYPES = ['FCS', 'FBS', 'FCR', 'FBR', 'PFCS', 'PFBS', 'PFCR', 'PFBR']
     VALID_PENDING_TYPES = ['FBS', 'FBR', 'PFBS', 'PFBR']
     TRIBUTE_TYPES = ['FIM', 'PFIM']
-    P2P_TYPES = ['PFTC', 'PFCS', 'PFCR', 'PFBS', 'PFBR']
+    P2P_CREATOR_TYPE = 'PFTC'  # P2P page creator
+    P2P_GIFT_TYPES = ['PFCS', 'PFCR', 'PFBS', 'PFBR']
     RECURRING_TYPES = ['FCR', 'FBR', 'PFCR', 'PFBR']
     
     # Fundraising page ID mappings
@@ -54,187 +55,236 @@ class GiftTransformer:
         # Create a copy to avoid modifying original
         df = df.copy()
         
-        # Initialize output columns
-        output_df = pd.DataFrame()
+        # Step 1: Handle PFTC (P2P page creators) - these need matching before other processing
+        if 'Campaign Type' in df.columns:
+            pftc_df = df[df['Campaign Type'] == self.P2P_CREATOR_TYPE].copy()
+            for idx, row in pftc_df.iterrows():
+                self._handle_pftc_record(row, p2p_config, re_api)
         
-        # Filter by campaign type and status
+        # Step 2: Filter by campaign type and status
         df = self._filter_by_status(df)
         
         if len(df) == 0:
             return pd.DataFrame(), pd.DataFrame(self.exceptions), self.p2p_pending
         
-        # Process each transformation rule
+        # Build tribute lookup from FIM/PFIM records for Gift Reference
+        tribute_lookup = {}
+        if tribute_df is not None and len(tribute_df) > 0:
+            for idx, row in tribute_df.iterrows():
+                txn_id = str(row.get('EN Transaction ID', '')).strip()
+                if txn_id:
+                    # Reference = Campaign Data 9 (lowercase) + " " + Campaign Data 11
+                    data_9 = str(row.get('Campaign Data 9', '')).lower()
+                    data_11 = str(row.get('Campaign Data 11', ''))
+                    tribute_lookup[txn_id] = f"{data_9} {data_11}".strip()
+        
+        # Initialize output dataframe
+        output_df = pd.DataFrame(index=df.index)
+        
+        # Get fiscal year designation from mapping
+        fy_designation = mapping_config.get('fiscal_year_designation', '')
+        forms_config = mapping_config.get('forms', {})
+        match_forms = mapping_config.get('MATCH', [])
+        
+        # === TRANSFORMATIONS ===
+        
+        # Branch: Based on Campaign ID prefix
         output_df['Branch'] = df.apply(self._get_branch, axis=1)
-        output_df['EN Donation Form Name'] = df['Campaign ID'].fillna('') if 'Campaign ID' in df.columns else ''
         
-        # Apply mapping config for Campaign, Appeal ID, Fund ID, Package
-        mapping_results = df.apply(
-            lambda row: self._apply_mapping(row, mapping_config), 
-            axis=1, 
-            result_type='expand'
-        )
-        output_df['Campaign'] = mapping_results[0]
-        output_df['Appeal ID'] = mapping_results[1]
-        output_df['Fund ID'] = mapping_results[2]
-        output_df['Package'] = mapping_results[3]
+        # EN Donation Form Name: Write exact Campaign ID
+        output_df['EN Donation Form Name'] = self._safe_column(df, 'Campaign ID')
         
-        # Gift Subtype
+        # Campaign, Appeal ID, Fund ID, Package from mapping.json
+        for idx, row in df.iterrows():
+            form_name = str(row.get('Campaign ID', ''))
+            if form_name in forms_config:
+                form_config = forms_config[form_name]
+                appeal = form_config.get('appeal', '')
+                fund = form_config.get('fund', '')
+                
+                # Prepend fiscal year designation EXCEPT for appeals starting with CCDEN
+                if appeal and not appeal.startswith('CCDEN'):
+                    appeal = fy_designation + appeal
+                
+                output_df.loc[idx, 'Campaign'] = ''  # Campaign field typically empty
+                output_df.loc[idx, 'Appeal ID'] = appeal
+                output_df.loc[idx, 'Fund ID'] = fund
+                output_df.loc[idx, 'Package'] = 'MATCH' if form_name in match_forms else ''
+            else:
+                output_df.loc[idx, 'Campaign'] = ''
+                output_df.loc[idx, 'Appeal ID'] = ''
+                output_df.loc[idx, 'Fund ID'] = ''
+                output_df.loc[idx, 'Package'] = ''
+        
+        # Gift Subtype: Based on Campaign Data 12 and Campaign ID
         output_df['Gift Subtype'] = df.apply(self._get_gift_subtype, axis=1)
         
-        # Donation Type
+        # Donation Type: "Recurring" for recurring campaign types
         output_df['Donation Type'] = df['Campaign Type'].apply(
             lambda x: 'Recurring' if x in self.RECURRING_TYPES else ''
-        )
+        ) if 'Campaign Type' in df.columns else ''
         
         # Monthly Donor fields
-        monthly_fields = df.apply(
-            lambda row: self._get_monthly_donor_fields(row, re_api), 
-            axis=1, 
-            result_type='expand'
-        )
-        monthly_cols = [
-            'Monthly Donor Status Description', 'Monthly Donor Status Date',
-            'Monthly Donor Anniversary Description', 'Monthly Donor Anniversary Date',
-            'Monthly Donor Annual Statement Type', 'Monthly Donor Channel',
-            'Monthly Donor Payment Method', 'Monthly Donor Region', 'Gifts Last Month'
-        ]
-        for i, col in enumerate(monthly_cols):
-            output_df[col] = monthly_fields[i] if i < len(monthly_fields.columns) else ''
+        for idx, row in df.iterrows():
+            monthly_fields = self._get_monthly_donor_fields(row, re_api)
+            output_df.loc[idx, 'Monthly Donor Status Description'] = monthly_fields[0]
+            output_df.loc[idx, 'Monthly Donor Status Date'] = monthly_fields[1]
+            output_df.loc[idx, 'Monthly Donor Anniversary Description'] = monthly_fields[2]
+            output_df.loc[idx, 'Monthly Donor Anniversary Date'] = monthly_fields[3]
+            output_df.loc[idx, 'Monthly Donor Annual Statement Type'] = monthly_fields[4]
+            output_df.loc[idx, 'Monthly Donor Channel'] = monthly_fields[5]
+            output_df.loc[idx, 'Monthly Donor Payment Method'] = monthly_fields[6]
+            output_df.loc[idx, 'Monthly Donor Region'] = monthly_fields[7]
+            output_df.loc[idx, 'Gifts Last Month'] = monthly_fields[8]
         
-        # P2P fields
-        p2p_fields = df.apply(
-            lambda row: self._get_p2p_fields(row, p2p_config), 
-            axis=1, 
-            result_type='expand'
-        )
-        output_df['EN Fundraising Page ID'] = p2p_fields[0]
-        output_df['EN Fundraising Page Name'] = p2p_fields[1]
-        output_df['EN Campaign ID'] = p2p_fields[2]
-        output_df['EN Campaign Name'] = p2p_fields[3]
-        output_df['Gift Solicitor'] = p2p_fields[4]
+        # P2P Fields (for PFCS, PFCR, PFBS, PFBR)
+        for idx, row in df.iterrows():
+            p2p_fields = self._get_p2p_fields(row, p2p_config)
+            output_df.loc[idx, 'EN Fundraising Page ID'] = p2p_fields[0]
+            output_df.loc[idx, 'EN Fundraising Page Name'] = p2p_fields[1]
+            output_df.loc[idx, 'EN Campaign ID'] = p2p_fields[2]
+            output_df.loc[idx, 'EN Campaign Name'] = p2p_fields[3]
+            output_df.loc[idx, 'Solicitor'] = p2p_fields[4]
         
         # Direct field mappings
-        output_df['EN Transaction ID'] = df['EN Transaction ID'].fillna('') if 'EN Transaction ID' in df.columns else ''
-        output_df['Gift Amount'] = df['Campaign Data 4'].fillna('') if 'Campaign Data 4' in df.columns else ''
-        output_df['Gift Date'] = df['Campaign Date'].fillna('') if 'Campaign Date' in df.columns else ''
-        output_df['GL Post Date'] = df['Campaign Date'].fillna('') if 'Campaign Date' in df.columns else ''
-        output_df['Stripe Transaction ID'] = df['Campaign Data 2'].fillna('') if 'Campaign Data 2' in df.columns else ''
-        output_df['Engaging Networks ID'] = df['Supporter ID'].fillna('') if 'Supporter ID' in df.columns else ''
+        output_df['EN Transaction ID'] = self._safe_column(df, 'EN Transaction ID')
+        output_df['Gift Amount'] = self._safe_column(df, 'Campaign Data 4')
+        output_df['Gift Date'] = self._safe_column(df, 'Campaign Date')
+        output_df['GL Post Date'] = self._safe_column(df, 'Campaign Date')
+        output_df['Stripe Transaction ID'] = self._safe_column(df, 'Campaign Data 2')
+        output_df['Engaging Networks ID'] = self._safe_column(df, 'Supporter ID')
         
-        # Handle columns that might have different names
-        if 'Company/Org Name' in df.columns:
-            output_df['Org Name'] = df['Company/Org Name'].fillna('')
-        elif 'Company Name' in df.columns:
-            output_df['Org Name'] = df['Company Name'].fillna('')
-        else:
-            output_df['Org Name'] = ''
+        # Org Name (working column, removed in final export)
+        output_df['Org Name'] = self._safe_column(df, 'Company/Org Name', 
+                                  fallback_col='Company Name')
         
-        if 'Raisers Edge Constituent ID' in df.columns:
-            output_df['Constituent ID'] = df['Raisers Edge Constituent ID'].fillna('')
-        elif 'RE Constituent ID' in df.columns:
-            output_df['Constituent ID'] = df['RE Constituent ID'].fillna('')
-        else:
-            output_df['Constituent ID'] = ''
+        # Constituent ID
+        output_df['Constituent ID'] = self._safe_column(df, 'Raisers Edge Constituent ID',
+                                       fallback_col='RE Constituent ID')
         
-        output_df['First Name'] = df['First Name'].fillna('') if 'First Name' in df.columns else ''
-        output_df['Nickname'] = df['First Name'].fillna('') if 'First Name' in df.columns else ''
-        output_df['Middle Name'] = df['Middle Name'].fillna('') if 'Middle Name' in df.columns else ''
-        output_df['Last Name'] = df['Last Name'].fillna('') if 'Last Name' in df.columns else ''
+        # Name fields
+        output_df['First Name'] = self._safe_column(df, 'First Name')
+        output_df['Nickname'] = self._safe_column(df, 'First Name')  # Same as First Name
+        output_df['Middle Name'] = self._safe_column(df, 'Middle Name')
+        output_df['Last Name'] = self._safe_column(df, 'Last Name')
         
-        # Spouse name parsing
-        spouse_fields = df.apply(
-            lambda row: self._parse_spouse_name(row), 
-            axis=1, 
-            result_type='expand'
-        )
-        output_df['Spouse First Name'] = spouse_fields[0]
-        output_df['Spouse Middle Name'] = spouse_fields[1]
-        output_df['Spouse Last Name'] = spouse_fields[2]
+        # Spouse name parsing from Partner Name
+        for idx, row in df.iterrows():
+            spouse_first, spouse_middle, spouse_last = self._parse_spouse_name(row)
+            output_df.loc[idx, 'Spouse First Name'] = spouse_first
+            output_df.loc[idx, 'Spouse Middle Name'] = spouse_middle
+            output_df.loc[idx, 'Spouse Last Name'] = spouse_last
         
-        # Addressee/Salutation formulas (as strings for Excel)
-        output_df['Addressee'] = df.apply(
-            lambda row: self._get_addressee_formula(row, output_df.loc[row.name] if row.name in output_df.index else {}), 
-            axis=1
-        )
-        output_df['Spouse Addressee'] = output_df.apply(
-            lambda row: row['Addressee'] if row['Spouse Last Name'] else '', 
-            axis=1
-        )
-        output_df['Salutation'] = df.apply(
-            lambda row: self._get_salutation_formula(row, output_df.loc[row.name] if row.name in output_df.index else {}), 
-            axis=1
-        )
-        output_df['Spouse Salutation'] = output_df.apply(
-            lambda row: row['Salutation'] if row['Spouse Last Name'] else '', 
-            axis=1
-        )
+        # Spouse Nickname (same as Spouse First Name)
+        output_df['Spouse Nickname'] = output_df['Spouse First Name']
         
-        # Address fields
-        if 'Address 1' in df.columns:
-            addr1 = df['Address 1'].fillna('')
-        elif 'Address' in df.columns:
-            addr1 = df['Address'].fillna('')
-        else:
-            addr1 = pd.Series([''] * len(df), index=df.index)
+        # Addressee, Salutation - These will be EXCEL FORMULAS injected in the Excel export
+        # Placeholder values here, actual formulas added in create_excel_output
+        output_df['Addressee'] = ''
+        output_df['Spouse Addressee'] = ''
+        output_df['Salutation'] = ''
+        output_df['Spouse Salutation'] = ''
         
-        if 'Address 2' in df.columns:
-            addr2 = df['Address 2'].fillna('')
-        else:
-            addr2 = pd.Series([''] * len(df), index=df.index)
+        # Address: Concat Address 1 + " " + Address 2
+        addr1 = self._safe_column(df, 'Address 1', fallback_col='Address')
+        addr2 = self._safe_column(df, 'Address 2')
+        output_df['Address'] = (addr1.astype(str).replace('nan', '') + ' ' + 
+                                addr2.astype(str).replace('nan', '')).str.strip()
         
-        output_df['Address'] = (addr1.astype(str) + ' ' + addr2.astype(str)).str.strip()
-        output_df['City'] = df['City'].fillna('') if 'City' in df.columns else ''
-        output_df['State'] = df['State'].fillna('') if 'State' in df.columns else ''
+        output_df['City'] = self._safe_column(df, 'City')
+        output_df['State'] = self._safe_column(df, 'State')
+        output_df['ZIP'] = self._safe_column(df, 'ZIP', fallback_col='Postal Code')
         
-        if 'ZIP' in df.columns:
-            output_df['ZIP'] = df['ZIP'].fillna('')
-        elif 'Postal Code' in df.columns:
-            output_df['ZIP'] = df['Postal Code'].fillna('')
-        else:
-            output_df['ZIP'] = ''
-        
+        # Country: "US" becomes "United States"
         if 'Country' in df.columns:
             output_df['Country'] = df['Country'].apply(
-                lambda x: 'United States' if str(x).upper() == 'US' else x
-            ).fillna('')
+                lambda x: 'United States' if str(x).upper() == 'US' else (x if pd.notna(x) else '')
+            )
         else:
             output_df['Country'] = ''
         
-        output_df['E-mail'] = df['Email'].fillna('') if 'Email' in df.columns else ''
+        output_df['E-mail'] = self._safe_column(df, 'Email')
         
-        # Mobile phone - remove (+1)
+        # Cell: Mobile Phone with (+1) removed
         if 'Mobile Phone' in df.columns:
-            output_df['Cell'] = df['Mobile Phone'].fillna('').astype(str).str.replace(r'^\(\+1\)', '', regex=True).str.strip()
+            output_df['Cell'] = df['Mobile Phone'].fillna('').astype(str).str.replace(r'^\(\+1\)\s*', '', regex=True).str.strip()
         elif 'Phone' in df.columns:
-            output_df['Cell'] = df['Phone'].fillna('').astype(str).str.replace(r'^\(\+1\)', '', regex=True).str.strip()
+            output_df['Cell'] = df['Phone'].fillna('').astype(str).str.replace(r'^\(\+1\)\s*', '', regex=True).str.strip()
         else:
             output_df['Cell'] = ''
         
-        # Gift Reference (from tribute matching)
-        if tribute_df is not None and len(tribute_df) > 0:
-            output_df['Gift Reference'] = df.apply(
-                lambda row: self._get_gift_reference(row, tribute_df), 
-                axis=1
-            )
-        else:
-            output_df['Gift Reference'] = ''
+        # Gift Reference: From FIM/PFIM tribute matching
+        output_df['Gift Reference'] = df['EN Transaction ID'].apply(
+            lambda x: tribute_lookup.get(str(x).strip(), '')
+        ) if 'EN Transaction ID' in df.columns else ''
         
-        # Requests no email (from QCB campaign type)
-        output_df['Requests no email?'] = df.apply(self._get_no_email, axis=1)
+        # Requests no email?: From QCB campaign type (handled separately)
+        output_df['Requests no email?'] = ''
         
-        # Key Indicator - all "I" initially
+        # Key Indicator: "I" for individual, "O" for organization
         output_df['Key Indicator'] = 'I'
+        # Mark as "O" if Org Name has a value
+        org_mask = output_df['Org Name'].notna() & (output_df['Org Name'] != '')
+        output_df.loc[org_mask, 'Key Indicator'] = 'O'
         
-        # Mark records with Org Name as "O"
-        output_df.loc[output_df['Org Name'].notna() & (output_df['Org Name'] != ''), 'Key Indicator'] = 'O'
-        
-        # Credit Type (usually empty, set based on business rules)
+        # Credit Type (typically empty)
         output_df['Credit Type'] = ''
         
         # Create exceptions dataframe
         exceptions_df = pd.DataFrame(self.exceptions) if self.exceptions else pd.DataFrame()
         
         return output_df, exceptions_df, self.p2p_pending
+    
+    def _safe_column(self, df: pd.DataFrame, col_name: str, fallback_col: str = None) -> pd.Series:
+        """Safely get a column, returning empty strings if not found"""
+        if col_name in df.columns:
+            return df[col_name].fillna('')
+        elif fallback_col and fallback_col in df.columns:
+            return df[fallback_col].fillna('')
+        else:
+            return pd.Series([''] * len(df), index=df.index)
+    
+    def _handle_pftc_record(self, row: pd.Series, p2p_config: dict, re_api) -> None:
+        """Handle PFTC (P2P page creator) records for solicitor matching"""
+        campaign_number = str(row.get('Campaign Number', ''))
+        
+        # Skip if already in P2P config
+        if campaign_number in p2p_config:
+            return
+        
+        # Try to match: First by RE System Record ID, then by Campaign Data 11 (email)
+        system_record_id = str(row.get('System Record ID', row.get('RE System Record ID', '')))
+        campaign_data_11 = str(row.get('Campaign Data 11', ''))  # Email
+        
+        re_match = None
+        matched_on = None
+        
+        if re_api and re_api.is_authenticated():
+            # Try System Record ID first
+            if system_record_id:
+                result = re_api.find_p2p_solicitor(system_record_id=system_record_id)
+                if result:
+                    re_match = result
+                    matched_on = 'System Record ID'
+            
+            # Try email if no match
+            if not re_match and campaign_data_11:
+                result = re_api.find_p2p_solicitor(email=campaign_data_11)
+                if result:
+                    re_match = result
+                    matched_on = 'Email (Campaign Data 11)'
+        
+        # Add to pending list for user review
+        self.p2p_pending.append({
+            'campaign_number': campaign_number,
+            'campaign_type': 'PFTC',
+            'campaign_data_6': row.get('Campaign Data 6', ''),
+            'campaign_data_7': row.get('Campaign Data 7', ''),
+            'campaign_data_10': row.get('Campaign Data 10', ''),  # Name
+            'campaign_data_11': campaign_data_11,  # Email
+            'system_record_id': system_record_id,
+            're_match': re_match
+        })
     
     def _filter_by_status(self, df: pd.DataFrame) -> pd.DataFrame:
         """Filter records by campaign type and status"""
@@ -265,7 +315,7 @@ class GiftTransformer:
         
         for idx in df[exception_mask].index:
             self.exceptions.append({
-                'EN Transaction ID': df.loc[idx, 'EN Transaction ID'],
+                'EN Transaction ID': df.loc[idx, 'EN Transaction ID'] if 'EN Transaction ID' in df.columns else '',
                 'Campaign Type': df.loc[idx, 'Campaign Type'],
                 'Campaign Status': df.loc[idx, 'Campaign Status'],
                 'Campaign ID': df.loc[idx, 'Campaign ID'] if 'Campaign ID' in df.columns else '',
@@ -275,7 +325,7 @@ class GiftTransformer:
         # Filter to valid records first
         filtered_df = df[valid_mask].copy()
         
-        # Now filter out form names starting with D.8., Y.8., or S.8. and add to exceptions
+        # Filter out form names starting with D.8., Y.8., or S.8. and add to exceptions
         if 'Campaign ID' in filtered_df.columns:
             excluded_form_mask = filtered_df['Campaign ID'].str.startswith(('D.8.', 'Y.8.', 'S.8.'), na=False)
             
@@ -305,35 +355,6 @@ class GiftTransformer:
             return 'Wyoming'
         return ''
     
-    def _apply_mapping(self, row: pd.Series, mapping_config: dict) -> tuple:
-        """Apply mapping configuration for Campaign, Appeal ID, Fund ID, Package"""
-        form_name = str(row.get('Campaign ID', ''))
-        campaign_id = str(row.get('Campaign ID', ''))
-        
-        fy_designation = mapping_config.get('fiscal_year_designation', '')
-        forms = mapping_config.get('forms', {})
-        match_forms = mapping_config.get('MATCH', [])
-        
-        campaign = ''
-        appeal_id = ''
-        fund_id = ''
-        package = ''
-        
-        if form_name in forms:
-            form_config = forms[form_name]
-            appeal_id = form_config.get('appeal', '')
-            fund_id = form_config.get('fund', '')
-            
-            # Prepend fiscal year designation unless appeal starts with CCDEN
-            if appeal_id and not appeal_id.startswith('CCDEN'):
-                appeal_id = fy_designation + appeal_id
-            
-            # Package is MATCH only for forms in the MATCH list
-            if form_name in match_forms:
-                package = 'MATCH'
-        
-        return (campaign, appeal_id, fund_id, package)
-    
     def _get_gift_subtype(self, row: pd.Series) -> str:
         """Determine gift subtype from Campaign Data 12 and Campaign ID"""
         data_12 = str(row.get('Campaign Data 12', '')).lower()
@@ -354,35 +375,32 @@ class GiftTransformer:
         """Get all monthly donor fields for recurring gifts"""
         campaign_type = str(row.get('Campaign Type', ''))
         
+        # Only process recurring types
         if campaign_type not in self.RECURRING_TYPES:
             return ('', '', '', '', '', '', '', '', '')
         
+        # Parse Campaign Date (yyyy-mm-dd format)
         campaign_date_str = str(row.get('Campaign Date', ''))
-        data_16_str = str(row.get('Campaign Data 16', ''))
-        
-        # Parse dates
         try:
             campaign_date = pd.to_datetime(campaign_date_str)
         except:
             campaign_date = None
         
-        # Parse Campaign Data 16 (dd/mm/yyyy format)
+        # Parse Campaign Data 16 (dd/mm/yyyy format) - this is the recurring start date
+        data_16_str = str(row.get('Campaign Data 16', ''))
+        data_16_date = None
         try:
-            data_16_date = pd.to_datetime(data_16_str, format='%d/%m/%Y')
+            # Parse as dd/mm/yyyy
+            data_16_date = datetime.strptime(data_16_str, '%d/%m/%Y')
         except:
-            data_16_date = None
+            pass
         
-        # Determine if this is a new recurring gift (dates match)
-        is_new_recurring = False
-        if campaign_date and data_16_date:
-            is_new_recurring = (campaign_date.date() == data_16_date.date())
-        
-        # Branch for region
+        # Determine branch for region mapping
         branch = self._get_branch(row)
         region_map = {'Main': 'Denver', 'WSlope': 'Western Slope', 'Wyoming': 'Wyoming'}
         region = region_map.get(branch, '')
         
-        # Payment method
+        # Payment method based on campaign type
         if campaign_type in ['FCR', 'PFCR']:
             payment_method = 'Credit Card/Electronic'
         elif campaign_type in ['FBR', 'PFBR']:
@@ -390,81 +408,50 @@ class GiftTransformer:
         else:
             payment_method = ''
         
+        # Check if this is a NEW recurring gift (Campaign Data 16 date = Campaign Date)
+        is_new_recurring = False
+        if campaign_date and data_16_date:
+            is_new_recurring = (campaign_date.date() == data_16_date.date())
+        
         if is_new_recurring and campaign_date:
+            # New recurring gift - populate all monthly donor fields
             status = 'Active'
             status_date = campaign_date.strftime('%Y-%m-%d')
-            anniversary_desc = campaign_date.strftime('%B')
+            anniversary_desc = campaign_date.strftime('%B')  # Month name (MMMM)
             anniversary_date = campaign_date.strftime('%Y-%m-%d')
             statement_type = 'Emailed'
             channel = 'Digital -- Recurring'
             gifts_last_month = ''
         else:
-            # Need to check for gifts in previous month
-            gifts_last_month = 'CHECK'  # Default to CHECK, actual lookup would use RE API
-            
-            if re_api and campaign_date:
-                # Look up gifts from previous month
-                re_id = row.get('System Record ID', row.get('RE System Record ID', ''))
-                if re_id:
-                    gifts = self._lookup_previous_month_gifts(re_api, re_id, campaign_date)
-                    if gifts:
-                        gifts_last_month = '\n'.join([f"{g['date']} - ${g['amount']}" for g in gifts])
-            
+            # Existing recurring gift - need to look up previous month's gifts
             status = ''
             status_date = ''
             anniversary_desc = ''
             anniversary_date = ''
             statement_type = ''
             channel = ''
+            gifts_last_month = 'CHECK'  # Default to CHECK
         
         return (status, status_date, anniversary_desc, anniversary_date, 
                 statement_type, channel, payment_method, region, gifts_last_month)
     
-    def _lookup_previous_month_gifts(self, re_api, constituent_id: str, current_date: datetime) -> list:
-        """Look up gifts from previous month for recurring gift verification"""
-        # Calculate previous month date range
-        prev_month = current_date - relativedelta(months=1)
-        day = current_date.day
-        
-        # Handle end of month edge cases
-        gifts = []
-        days_to_check = [day]
-        
-        # For gifts on 31st, also check 30th, 28th, 29th
-        if day >= 29:
-            days_to_check.extend([28, 29, 30])
-        elif day == 30:
-            days_to_check.extend([28, 29])
-        
-        try:
-            for check_day in set(days_to_check):
-                try:
-                    check_date = prev_month.replace(day=check_day)
-                    # This would call the RE API to get gifts
-                    # result = re_api.get_constituent_gifts(constituent_id, check_date)
-                    # gifts.extend(result)
-                except ValueError:
-                    # Day doesn't exist in that month
-                    continue
-        except Exception:
-            pass
-        
-        return gifts
-    
     def _get_p2p_fields(self, row: pd.Series, p2p_config: dict) -> tuple:
-        """Get P2P fundraising fields"""
+        """Get P2P fundraising fields for PFCS, PFCR, PFBS, PFBR campaign types"""
         campaign_type = str(row.get('Campaign Type', ''))
         
-        if campaign_type not in ['PFCS', 'PFCR', 'PFBS', 'PFBR']:
+        if campaign_type not in self.P2P_GIFT_TYPES:
             return ('', '', '', '', '')
         
+        # EN Fundraising Page ID = Campaign Data 15
         data_15 = str(row.get('Campaign Data 15', ''))
-        campaign_number = str(row.get('Campaign Number', ''))
         
-        # Get fundraising page name from mapping
+        # EN Fundraising Page Name from mapping
         page_name = self.FUNDRAISING_PAGE_MAPPING.get(data_15, '')
         
-        # Look up in P2P config
+        # EN Campaign ID = Campaign Number
+        campaign_number = str(row.get('Campaign Number', ''))
+        
+        # Look up in P2P config for EN Campaign Name and Solicitor
         campaign_name = ''
         solicitor = ''
         
@@ -473,22 +460,32 @@ class GiftTransformer:
             campaign_name = p2p_entry.get('EN Campaign Name', '')
             solicitor = p2p_entry.get('Solicitor', '')
         else:
-            # Add to pending list for manual matching
-            self.p2p_pending.append({
-                'campaign_number': campaign_number,
-                'campaign_type': campaign_type,
-                'campaign_data_6': row.get('Campaign Data 6', ''),
-                'campaign_data_7': row.get('Campaign Data 7', ''),
-                'campaign_data_10': row.get('Campaign Data 10', ''),
-                'campaign_data_11': row.get('Campaign Data 11', ''),
-                'system_record_id': row.get('System Record ID', row.get('RE System Record ID', '')),
-                're_match': None  # Would be populated by RE API lookup
-            })
+            # Add to pending list for manual matching if not found
+            if campaign_number and campaign_number not in [p.get('campaign_number') for p in self.p2p_pending]:
+                self.p2p_pending.append({
+                    'campaign_number': campaign_number,
+                    'campaign_type': campaign_type,
+                    'campaign_data_6': row.get('Campaign Data 6', ''),
+                    'campaign_data_7': row.get('Campaign Data 7', ''),
+                    'campaign_data_10': row.get('Campaign Data 10', ''),
+                    'campaign_data_11': row.get('Campaign Data 11', ''),
+                    'system_record_id': row.get('System Record ID', row.get('RE System Record ID', '')),
+                    're_match': None
+                })
         
         return (data_15, page_name, campaign_number, campaign_name, solicitor)
     
     def _parse_spouse_name(self, row: pd.Series) -> tuple:
-        """Parse spouse name from Partner Name field"""
+        """
+        Parse spouse name from Partner Name field.
+        
+        Logic:
+        - IF Partner Name contains #, extract spouse info
+        - Spouse First Name = text before first space
+        - IF second part is single letter or letter+period, it's Spouse Middle Name
+        - Spouse Last Name = remaining text, or primary Last Name if none
+        - IF Spouse First = First AND Spouse Last = Last, clear all spouse fields
+        """
         partner_name = str(row.get('Partner Name', ''))
         first_name = str(row.get('First Name', ''))
         last_name = str(row.get('Last Name', ''))
@@ -513,68 +510,26 @@ class GiftTransformer:
             spouse_first = parts[0]
         
         if len(parts) >= 2:
-            # Check if second part is a middle initial
-            if len(parts[1]) == 1 or (len(parts[1]) == 2 and parts[1].endswith('.')):
-                spouse_middle = parts[1].rstrip('.')
+            # Check if second part is a middle initial (single letter or letter + period)
+            second_part = parts[1]
+            is_middle_initial = (len(second_part) == 1 or 
+                                (len(second_part) == 2 and second_part.endswith('.')))
+            
+            if is_middle_initial:
+                spouse_middle = second_part.rstrip('.')
                 if len(parts) >= 3:
                     spouse_last = ' '.join(parts[2:])
                 else:
-                    spouse_last = last_name
+                    spouse_last = last_name  # Use primary last name
             else:
+                # No middle initial, rest is last name
                 spouse_last = ' '.join(parts[1:])
         else:
+            # Only first name provided, use primary last name
             spouse_last = last_name
         
-        # If spouse name matches primary name, clear all fields
+        # If spouse name matches primary name exactly, clear all fields
         if spouse_first == first_name and spouse_last == last_name:
             return ('', '', '')
         
         return (spouse_first, spouse_middle, spouse_last)
-    
-    def _get_addressee_formula(self, row: pd.Series, output_row: dict) -> str:
-        """Generate addressee value (simplified - actual Excel would use formula)"""
-        last_name = str(row.get('Last Name', ''))
-        spouse_last = str(output_row.get('Spouse Last Name', ''))
-        
-        if spouse_last and last_name == spouse_last:
-            return '49'  # Code for same last name
-        elif spouse_last:
-            return '48'  # Code for different last names
-        return ''
-    
-    def _get_salutation_formula(self, row: pd.Series, output_row: dict) -> str:
-        """Generate salutation value (simplified - actual Excel would use formula)"""
-        spouse_last = str(output_row.get('Spouse Last Name', ''))
-        
-        if not spouse_last:
-            return '35'  # Individual salutation code
-        return '46'  # Couple salutation code
-    
-    def _get_gift_reference(self, row: pd.Series, tribute_df: pd.DataFrame) -> str:
-        """Match FIM/PFIM records to get gift reference"""
-        transaction_id = str(row.get('EN Transaction ID', ''))
-        
-        if tribute_df is None or len(tribute_df) == 0:
-            return ''
-        
-        # Convert to string for matching
-        tribute_df = tribute_df.copy()
-        tribute_df['EN Transaction ID'] = tribute_df['EN Transaction ID'].astype(str).str.strip()
-        
-        match = tribute_df[tribute_df['EN Transaction ID'] == transaction_id.strip()]
-        
-        if len(match) > 0:
-            data_9 = str(match.iloc[0].get('Campaign Data 9', '')).lower()
-            data_11 = str(match.iloc[0].get('Campaign Data 11', ''))
-            return f"{data_9} {data_11}"
-        
-        return ''
-    
-    def _get_no_email(self, row: pd.Series) -> str:
-        """Determine no email preference from QCB campaign type"""
-        campaign_type = str(row.get('Campaign Type', ''))
-        campaign_status = str(row.get('Campaign Status', ''))
-        
-        if campaign_type == 'QCB':
-            return 'FALSE' if campaign_status == 'Y' else 'TRUE'
-        return ''
