@@ -318,10 +318,10 @@ class RESkyAPI:
         days: List[int] = None
     ) -> List[Dict[str, Any]]:
         """
-        Get gifts for a constituent, optionally filtered by date.
+        Get gifts for a constituent, filtered by gift date (not date_added).
         
         Args:
-            constituent_id: RE Constituent ID
+            constituent_id: RE Constituent ID (could be lookup ID or system record ID)
             gift_date: Specific date to filter gifts
             date_range_days: Number of days around gift_date to include
             year: Year to filter (used with month/days)
@@ -331,26 +331,35 @@ class RESkyAPI:
         Returns:
             List of gifts with 'date' and 'amount' keys
         """
+        # Fetch all gifts for constituent - we'll filter by gift date in Python
         params = {'limit': 500}
+        result = None
         
-        # If year/month/days provided, construct date range
-        if year and month and days:
-            # Get gifts for the entire month, then filter
-            import calendar
-            days_in_month = calendar.monthrange(year, month)[1]
-            start_date = f"{year}-{month:02d}-01"
-            end_date = f"{year}-{month:02d}-{days_in_month:02d}"
-            params['date_added'] = f"gte {start_date}"
-        elif gift_date:
-            start_date = gift_date - timedelta(days=date_range_days)
-            end_date = gift_date + timedelta(days=date_range_days)
-            params['date_added'] = f"gte {start_date.strftime('%Y-%m-%d')}"
-        
-        result = self._make_request(
-            'GET', 
-            f'/gift/v1/constituents/{constituent_id}/gifts',
-            params=params
-        )
+        # First try using the ID directly as a system record ID
+        try:
+            result = self._make_request(
+                'GET', 
+                f'/gift/v1/constituents/{constituent_id}/gifts',
+                params=params
+            )
+        except Exception as e:
+            # If we get a 404, try looking up by lookup_id instead
+            if '404' in str(e):
+                try:
+                    constituent = self.get_constituent_by_lookup_id(constituent_id)
+                    if constituent and constituent.get('id'):
+                        system_record_id = constituent.get('id')
+                        result = self._make_request(
+                            'GET', 
+                            f'/gift/v1/constituents/{system_record_id}/gifts',
+                            params=params
+                        )
+                except:
+                    pass
+            
+            # If still no result, return empty list
+            if not result:
+                return []
         
         gifts = result.get('value', []) if result else []
         
@@ -359,25 +368,33 @@ class RESkyAPI:
             target_dates = [f"{year}-{month:02d}-{d:02d}" for d in days]
             filtered_gifts = []
             for g in gifts:
-                gift_date_str = g.get('date', '')[:10]
+                gift_date_str = g.get('date', '')[:10] if g.get('date') else ''
                 if gift_date_str in target_dates:
                     # Exclude soft credits (check gift type)
                     gift_type = g.get('type', '')
-                    if 'soft' not in gift_type.lower():
-                        filtered_gifts.append({
-                            'date': gift_date_str,
-                            'amount': g.get('amount', {}).get('value', 0)
-                        })
+                    if gift_type and 'soft' in gift_type.lower():
+                        continue
+                    filtered_gifts.append({
+                        'date': gift_date_str,
+                        'amount': g.get('amount', {}).get('value', 0) if g.get('amount') else 0
+                    })
             return filtered_gifts
         
         # Filter by exact date if specified
         if gift_date and gifts:
             target_date = gift_date.date()
-            gifts = [
-                {'date': g.get('date', '')[:10], 'amount': g.get('amount', {}).get('value', 0)}
-                for g in gifts 
-                if datetime.fromisoformat(g.get('date', '')[:10]).date() == target_date
-            ]
+            filtered = []
+            for g in gifts:
+                try:
+                    gift_date_str = g.get('date', '')[:10] if g.get('date') else ''
+                    if gift_date_str and datetime.fromisoformat(gift_date_str).date() == target_date:
+                        filtered.append({
+                            'date': gift_date_str,
+                            'amount': g.get('amount', {}).get('value', 0) if g.get('amount') else 0
+                        })
+                except:
+                    pass
+            return filtered
         
         return gifts
     
