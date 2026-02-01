@@ -94,13 +94,60 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
     ws_main = wb.active
     ws_main.title = "Gift Import"
     
-    # Write headers and data
-    for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 1):
-        for c_idx, value in enumerate(row, 1):
-            cell = ws_main.cell(row=r_idx, column=c_idx, value=value)
-            if r_idx == 1:
-                cell.font = Font(bold=True)
-                cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+    # Get column headers
+    headers = list(df.columns)
+    
+    # Write headers
+    for c_idx, header in enumerate(headers, 1):
+        cell = ws_main.cell(row=1, column=c_idx, value=header)
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+    
+    # Find column letters for formula references
+    col_letters = {}
+    for idx, header in enumerate(headers):
+        col_letters[header] = get_column_letter(idx + 1)
+    
+    # Write data rows
+    for r_idx, (df_idx, row) in enumerate(df.iterrows(), 2):
+        for c_idx, header in enumerate(headers, 1):
+            value = row[header]
+            
+            # Inject Excel formulas for Addressee/Salutation columns
+            if header == 'Addressee' and 'Last Name' in col_letters and 'Spouse Last Name' in col_letters:
+                ln_col = col_letters['Last Name']
+                sln_col = col_letters['Spouse Last Name']
+                # Formula: =IFS(LastName=SpouseLastName,49,LastName<>SpouseLastName,48)
+                # But we need to handle empty spouse last name
+                formula = f'=IF({sln_col}{r_idx}="","",IFS({ln_col}{r_idx}={sln_col}{r_idx},49,{ln_col}{r_idx}<>{sln_col}{r_idx},48))'
+                ws_main.cell(row=r_idx, column=c_idx, value=formula)
+            
+            elif header == 'Spouse Addressee' and 'Addressee' in col_letters and 'Spouse Last Name' in col_letters:
+                addr_col = col_letters['Addressee']
+                sln_col = col_letters['Spouse Last Name']
+                # Formula: =IF(SpouseLastName<>"",Addressee,"")
+                formula = f'=IF({sln_col}{r_idx}<>"",{addr_col}{r_idx},"")'
+                ws_main.cell(row=r_idx, column=c_idx, value=formula)
+            
+            elif header == 'Salutation' and 'Spouse Last Name' in col_letters:
+                sln_col = col_letters['Spouse Last Name']
+                # Formula: =IF(SpouseLastName="",35,46)
+                formula = f'=IF({sln_col}{r_idx}="",35,46)'
+                ws_main.cell(row=r_idx, column=c_idx, value=formula)
+            
+            elif header == 'Spouse Salutation' and 'Salutation' in col_letters and 'Spouse Last Name' in col_letters:
+                sal_col = col_letters['Salutation']
+                sln_col = col_letters['Spouse Last Name']
+                # Formula: =IF(SpouseLastName<>"",Salutation,"")
+                formula = f'=IF({sln_col}{r_idx}<>"",{sal_col}{r_idx},"")'
+                ws_main.cell(row=r_idx, column=c_idx, value=formula)
+            
+            else:
+                # Write regular value
+                if pd.isna(value):
+                    ws_main.cell(row=r_idx, column=c_idx, value='')
+                else:
+                    ws_main.cell(row=r_idx, column=c_idx, value=value)
     
     # Auto-adjust column widths
     for col in ws_main.columns:
@@ -108,24 +155,23 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
         column = col[0].column_letter
         for cell in col:
             try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
+                cell_val = str(cell.value) if cell.value else ''
+                # Don't count formulas for width
+                if not cell_val.startswith('='):
+                    if len(cell_val) > max_length:
+                        max_length = len(cell_val)
             except:
                 pass
-        adjusted_width = min(max_length + 2, 50)
+        adjusted_width = min(max(max_length + 2, 10), 50)
         ws_main.column_dimensions[column].width = adjusted_width
-    
-    # Find column indices for conditional formatting
-    headers = list(df.columns)
     
     # Conditional formatting rules
     yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
     red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
     
     # Highlight Spouse First Name if contains number
-    if "Spouse First Name" in headers:
-        col_idx = headers.index("Spouse First Name") + 1
-        col_letter = get_column_letter(col_idx)
+    if "Spouse First Name" in col_letters:
+        col_letter = col_letters["Spouse First Name"]
         ws_main.conditional_formatting.add(
             f'{col_letter}2:{col_letter}{len(df)+1}',
             FormulaRule(
@@ -135,30 +181,26 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
         )
     
     # Highlight Gifts Last Month with CHECK
-    if "Gifts Last Month" in headers:
-        col_idx = headers.index("Gifts Last Month") + 1
-        col_letter = get_column_letter(col_idx)
+    if "Gifts Last Month" in col_letters:
+        col_letter = col_letters["Gifts Last Month"]
         ws_main.conditional_formatting.add(
             f'{col_letter}2:{col_letter}{len(df)+1}',
             CellIsRule(operator='equal', formula=['"CHECK"'], fill=yellow_fill)
         )
     
     # Highlight RE Constituent ID and Appeal ID if Key Indicator = "O"
-    if "Key Indicator" in headers:
-        ki_idx = headers.index("Key Indicator") + 1
-        ki_letter = get_column_letter(ki_idx)
+    if "Key Indicator" in col_letters:
+        ki_letter = col_letters["Key Indicator"]
         
-        if "Constituent ID" in headers:
-            col_idx = headers.index("Constituent ID") + 1
-            col_letter = get_column_letter(col_idx)
+        if "Constituent ID" in col_letters:
+            col_letter = col_letters["Constituent ID"]
             ws_main.conditional_formatting.add(
                 f'{col_letter}2:{col_letter}{len(df)+1}',
                 FormulaRule(formula=[f'${ki_letter}2="O"'], fill=red_fill)
             )
         
-        if "Appeal ID" in headers:
-            col_idx = headers.index("Appeal ID") + 1
-            col_letter = get_column_letter(col_idx)
+        if "Appeal ID" in col_letters:
+            col_letter = col_letters["Appeal ID"]
             ws_main.conditional_formatting.add(
                 f'{col_letter}2:{col_letter}{len(df)+1}',
                 FormulaRule(formula=[f'${ki_letter}2="O"'], fill=red_fill)
