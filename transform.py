@@ -245,14 +245,27 @@ class GiftTransformer:
         else:
             output_df['E-mail'] = ''
         
-        # Cell: Mobile Number with (+1) removed - try multiple column names
+        # Cell: Mobile Number with +1 removed - try multiple column names
         cell_col = None
         for col_name in ['Mobile Number', 'Mobile Phone', 'MobilePhone', 'Cell Phone', 'CellPhone', 'Cell', 'Mobile', 'Phone', 'phone', 'Telephone']:
             if col_name in df.columns:
                 cell_col = col_name
                 break
         if cell_col:
-            output_df['Cell'] = df[cell_col].fillna('').astype(str).str.replace(r'^\(\+1\)\s*', '', regex=True).str.strip()
+            # Clean phone numbers: remove (+1), +1, or just 1 at start, clear if only +1
+            def clean_phone(val):
+                if pd.isna(val):
+                    return ''
+                val = str(val).strip()
+                # Remove common prefixes
+                val = val.replace('(+1)', '').replace('+1', '').strip()
+                # If starts with just "1 " or "1-", remove it
+                if val.startswith('1 ') or val.startswith('1-'):
+                    val = val[2:].strip()
+                elif val == '1':
+                    val = ''
+                return val
+            output_df['Cell'] = df[cell_col].apply(clean_phone)
         else:
             output_df['Cell'] = ''
         
@@ -570,6 +583,7 @@ class GiftTransformer:
                     
                     debug_entry['Days to Check'] = days_to_check
                     debug_entry['Previous Month/Year'] = f"{prev_month}/{prev_year}"
+                    debug_entry['Target Dates'] = [f"{prev_year}-{prev_month:02d}-{d:02d}" for d in days_to_check]
                     
                     # Call RE API to get gifts
                     gifts_found = re_api.get_constituent_gifts(
@@ -579,7 +593,7 @@ class GiftTransformer:
                         days=days_to_check
                     )
                     
-                    debug_entry['RE API Response'] = gifts_found
+                    debug_entry['RE API Response'] = gifts_found if gifts_found else 'Empty or error'
                     
                     if gifts_found and len(gifts_found) > 0:
                         # Format: "date - $amount" with line breaks
