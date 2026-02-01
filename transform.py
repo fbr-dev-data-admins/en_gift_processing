@@ -217,7 +217,7 @@ class GiftTransformer:
         
         # ZIP: Try multiple possible column names from EN
         zip_col = None
-        for col_name in ['ZIP', 'Zip', 'zip', 'Postal Code', 'PostalCode', 'Zip Code', 'ZipCode']:
+        for col_name in ['ZIP Code', 'ZIP', 'Zip', 'zip', 'Postal Code', 'PostalCode', 'Zip Code', 'ZipCode']:
             if col_name in df.columns:
                 zip_col = col_name
                 break
@@ -245,10 +245,9 @@ class GiftTransformer:
         else:
             output_df['E-mail'] = ''
         
-        # Cell: Mobile Phone with (+1) removed - try multiple column names
-        # Per doc: Mobile Phone -> Cell, remove (+1)
+        # Cell: Mobile Number with (+1) removed - try multiple column names
         cell_col = None
-        for col_name in ['Mobile Phone', 'MobilePhone', 'Cell Phone', 'CellPhone', 'Cell', 'Mobile', 'Phone', 'phone', 'Telephone']:
+        for col_name in ['Mobile Number', 'Mobile Phone', 'MobilePhone', 'Cell Phone', 'CellPhone', 'Cell', 'Mobile', 'Phone', 'phone', 'Telephone']:
             if col_name in df.columns:
                 cell_col = col_name
                 break
@@ -256,6 +255,9 @@ class GiftTransformer:
             output_df['Cell'] = df[cell_col].fillna('').astype(str).str.replace(r'^\(\+1\)\s*', '', regex=True).str.strip()
         else:
             output_df['Cell'] = ''
+        
+        # Credit Type: Campaign Data 6
+        output_df['Credit Type'] = self._safe_column(df, 'Campaign Data 6')
         
         # Gift Reference: From FIM/PFIM tribute matching
         output_df['Gift Reference'] = df['EN Transaction ID'].apply(
@@ -275,9 +277,6 @@ class GiftTransformer:
         # Mark as "O" if Org Name has a value
         org_mask = output_df['Org Name'].notna() & (output_df['Org Name'] != '')
         output_df.loc[org_mask, 'Key Indicator'] = 'O'
-        
-        # Credit Type (typically empty)
-        output_df['Credit Type'] = ''
         
         # Create exceptions dataframe
         exceptions_df = pd.DataFrame(self.exceptions) if self.exceptions else pd.DataFrame()
@@ -301,8 +300,16 @@ class GiftTransformer:
         if campaign_number in p2p_config:
             return
         
-        # Try to match: First by RE System Record ID, then by Campaign Data 11 (email)
-        system_record_id = str(row.get('System Record ID', row.get('RE System Record ID', '')))
+        # Try multiple column names for RE System Record ID
+        system_record_id = ''
+        for col_name in ['RE Constituent System Record ID', 'System Record ID', 'RE System Record ID', 'Raisers Edge Constituent ID', 
+                         'RE Constituent ID', 'Raiser\'s Edge ID', 'RE ID', 
+                         'SystemRecordID', 'RESystemRecordID']:
+            val = str(row.get(col_name, '')).strip()
+            if val and val != 'nan' and val != '':
+                system_record_id = val
+                break
+        
         campaign_data_11 = str(row.get('Campaign Data 11', ''))  # Email
         
         re_match = None
@@ -483,7 +490,21 @@ class GiftTransformer:
         
         # Debug log entry
         en_txn_id = str(row.get('EN Transaction ID', ''))
-        re_system_id = str(row.get('System Record ID', row.get('RE System Record ID', ''))).strip()
+        
+        # Try multiple column names for RE System Record ID
+        re_system_id = ''
+        re_id_col_found = 'NOT FOUND'
+        for col_name in ['RE Constituent System Record ID', 'System Record ID', 'RE System Record ID', 'Raisers Edge Constituent ID', 
+                         'RE Constituent ID', 'Raiser\'s Edge ID', 'RE ID', 'Constituent ID',
+                         'SystemRecordID', 'RESystemRecordID', 'REID', 'RE_ID', 'Supporter ID']:
+            val = row.get(col_name, '')
+            if val is not None and str(val).strip() and str(val).strip() != 'nan':
+                re_system_id = str(val).strip()
+                re_id_col_found = col_name
+                break
+        
+        # Debug: Show what row index looks like
+        row_index_info = str(row.index.tolist()[:10]) if hasattr(row, 'index') else 'no index'
         
         debug_entry = {
             'EN Transaction ID': en_txn_id,
@@ -493,7 +514,9 @@ class GiftTransformer:
             'Parsed Campaign Date': str(campaign_date) if campaign_date else 'PARSE FAILED',
             'Parsed Data 16': str(data_16_date) if data_16_date else 'PARSE FAILED',
             'Is New Recurring': is_new_recurring,
-            'RE System Record ID': re_system_id,
+            'RE System Record ID': re_system_id if re_system_id else '(empty)',
+            'RE ID Column Found': re_id_col_found,
+            'Row Keys (sample)': row_index_info,
             'RE API Called': False,
             'RE API Response': None,
             'Gifts Last Month Result': ''
@@ -618,6 +641,16 @@ class GiftTransformer:
         else:
             # Add to pending list for manual matching if not found
             if campaign_number and campaign_number not in [p.get('campaign_number') for p in self.p2p_pending]:
+                # Get system record ID using multiple column name variations
+                system_record_id = ''
+                for col_name in ['RE Constituent System Record ID', 'System Record ID', 'RE System Record ID', 'Raisers Edge Constituent ID', 
+                                 'RE Constituent ID', 'Raiser\'s Edge ID', 'RE ID', 
+                                 'SystemRecordID', 'RESystemRecordID']:
+                    val = str(row.get(col_name, '')).strip()
+                    if val and val != 'nan' and val != '':
+                        system_record_id = val
+                        break
+                
                 self.p2p_pending.append({
                     'campaign_number': campaign_number,
                     'campaign_type': campaign_type,
@@ -625,7 +658,7 @@ class GiftTransformer:
                     'campaign_data_7': row.get('Campaign Data 7', ''),
                     'campaign_data_10': row.get('Campaign Data 10', ''),
                     'campaign_data_11': row.get('Campaign Data 11', ''),
-                    'system_record_id': row.get('System Record ID', row.get('RE System Record ID', '')),
+                    'system_record_id': system_record_id,
                     're_match': None
                 })
         
