@@ -169,13 +169,14 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
     yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
     red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
     
-    # Highlight Spouse First Name if contains number
+    # Highlight Spouse First Name if contains number (simpler formula that works with openpyxl)
     if "Spouse First Name" in col_letters:
         col_letter = col_letters["Spouse First Name"]
+        # Use a simpler formula - checks if any digit 0-9 appears
         ws_main.conditional_formatting.add(
             f'{col_letter}2:{col_letter}{len(df)+1}',
             FormulaRule(
-                formula=[f'SUMPRODUCT(--ISNUMBER(FIND({{0,1,2,3,4,5,6,7,8,9}},{col_letter}2)))>0'],
+                formula=[f'OR(ISNUMBER(SEARCH("0",{col_letter}2)),ISNUMBER(SEARCH("1",{col_letter}2)),ISNUMBER(SEARCH("2",{col_letter}2)),ISNUMBER(SEARCH("3",{col_letter}2)),ISNUMBER(SEARCH("4",{col_letter}2)),ISNUMBER(SEARCH("5",{col_letter}2)),ISNUMBER(SEARCH("6",{col_letter}2)),ISNUMBER(SEARCH("7",{col_letter}2)),ISNUMBER(SEARCH("8",{col_letter}2)),ISNUMBER(SEARCH("9",{col_letter}2)))'],
                 fill=yellow_fill
             )
         )
@@ -196,14 +197,14 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
             col_letter = col_letters["Constituent ID"]
             ws_main.conditional_formatting.add(
                 f'{col_letter}2:{col_letter}{len(df)+1}',
-                FormulaRule(formula=[f'${ki_letter}2="O"'], fill=red_fill)
+                FormulaRule(formula=[f'AND(${ki_letter}2="O",{col_letter}2="")'], fill=red_fill)
             )
         
         if "Appeal ID" in col_letters:
             col_letter = col_letters["Appeal ID"]
             ws_main.conditional_formatting.add(
                 f'{col_letter}2:{col_letter}{len(df)+1}',
-                FormulaRule(formula=[f'${ki_letter}2="O"'], fill=red_fill)
+                FormulaRule(formula=[f'AND(${ki_letter}2="O",{col_letter}2="")'], fill=red_fill)
             )
     
     # Add exceptions sheet if there are exceptions
