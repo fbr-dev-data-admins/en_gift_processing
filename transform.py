@@ -55,6 +55,19 @@ class GiftTransformer:
         # Create a copy to avoid modifying original
         df = df.copy()
         
+        # Build QCB lookup for "Requests no email?" field
+        # QCB records: Campaign Status = "Y" means FALSE (opted in), else TRUE (opted out)
+        qcb_lookup = {}
+        if 'Campaign Type' in df.columns and 'Supporter ID' in df.columns:
+            qcb_df = df[df['Campaign Type'] == 'QCB'].copy()
+            for idx, row in qcb_df.iterrows():
+                supporter_id = str(row.get('Supporter ID', '')).strip()
+                if supporter_id:
+                    status = str(row.get('Campaign Status', ''))
+                    # Y = opted in (FALSE = does not request no email)
+                    # Anything else = opted out (TRUE = requests no email)
+                    qcb_lookup[supporter_id] = 'FALSE' if status == 'Y' else 'TRUE'
+        
         # Step 1: Handle PFTC (P2P page creators) - these need matching before other processing
         if 'Campaign Type' in df.columns:
             pftc_df = df[df['Campaign Type'] == self.P2P_CREATOR_TYPE].copy()
@@ -102,11 +115,17 @@ class GiftTransformer:
                 appeal = form_config.get('appeal', '')
                 fund = form_config.get('fund', '')
                 
-                # Prepend fiscal year designation EXCEPT for appeals starting with CCDEN
+                # Campaign = fiscal_year_designation (e.g., "FY26"), EXCEPT CCDEN forms get "CCDEN"
+                if form_name.startswith('CCDEN') or (appeal and appeal.startswith('CCDEN')):
+                    campaign = 'CCDEN'
+                else:
+                    campaign = fy_designation  # e.g., "FY26"
+                
+                # Prepend fiscal year designation to Appeal EXCEPT for appeals starting with CCDEN
                 if appeal and not appeal.startswith('CCDEN'):
                     appeal = fy_designation + appeal
                 
-                output_df.loc[idx, 'Campaign'] = ''  # Campaign field typically empty
+                output_df.loc[idx, 'Campaign'] = campaign
                 output_df.loc[idx, 'Appeal ID'] = appeal
                 output_df.loc[idx, 'Fund ID'] = fund
                 output_df.loc[idx, 'Package'] = 'MATCH' if form_name in match_forms else ''
@@ -203,13 +222,25 @@ class GiftTransformer:
         else:
             output_df['Country'] = ''
         
-        output_df['E-mail'] = self._safe_column(df, 'Email')
+        # E-mail: Try multiple possible column names from EN
+        email_col = None
+        for col_name in ['Email', 'E-mail', 'Supporter Email', 'Email Address', 'email']:
+            if col_name in df.columns:
+                email_col = col_name
+                break
+        if email_col:
+            output_df['E-mail'] = df[email_col].fillna('')
+        else:
+            output_df['E-mail'] = ''
         
-        # Cell: Mobile Phone with (+1) removed
-        if 'Mobile Phone' in df.columns:
-            output_df['Cell'] = df['Mobile Phone'].fillna('').astype(str).str.replace(r'^\(\+1\)\s*', '', regex=True).str.strip()
-        elif 'Phone' in df.columns:
-            output_df['Cell'] = df['Phone'].fillna('').astype(str).str.replace(r'^\(\+1\)\s*', '', regex=True).str.strip()
+        # Cell: Mobile Phone with (+1) removed - try multiple column names
+        cell_col = None
+        for col_name in ['Mobile Phone', 'Cell Phone', 'Cell', 'Mobile', 'Phone', 'phone']:
+            if col_name in df.columns:
+                cell_col = col_name
+                break
+        if cell_col:
+            output_df['Cell'] = df[cell_col].fillna('').astype(str).str.replace(r'^\(\+1\)\s*', '', regex=True).str.strip()
         else:
             output_df['Cell'] = ''
         
@@ -218,8 +249,13 @@ class GiftTransformer:
             lambda x: tribute_lookup.get(str(x).strip(), '')
         ) if 'EN Transaction ID' in df.columns else ''
         
-        # Requests no email?: From QCB campaign type (handled separately)
-        output_df['Requests no email?'] = ''
+        # Requests no email?: From QCB lookup by Supporter ID
+        if 'Supporter ID' in df.columns:
+            output_df['Requests no email?'] = df['Supporter ID'].apply(
+                lambda x: qcb_lookup.get(str(x).strip(), '')
+            )
+        else:
+            output_df['Requests no email?'] = ''
         
         # Key Indicator: "I" for individual, "O" for organization
         output_df['Key Indicator'] = 'I'
@@ -379,21 +415,35 @@ class GiftTransformer:
         if campaign_type not in self.RECURRING_TYPES:
             return ('', '', '', '', '', '', '', '', '')
         
-        # Parse Campaign Date (yyyy-mm-dd format)
-        campaign_date_str = str(row.get('Campaign Date', ''))
+        # Parse Campaign Date (typically yyyy-mm-dd format from EN)
+        campaign_date_str = str(row.get('Campaign Date', '')).strip()
+        campaign_date = None
         try:
             campaign_date = pd.to_datetime(campaign_date_str)
         except:
-            campaign_date = None
+            pass
         
         # Parse Campaign Data 16 (dd/mm/yyyy format) - this is the recurring start date
-        data_16_str = str(row.get('Campaign Data 16', ''))
+        data_16_str = str(row.get('Campaign Data 16', '')).strip()
         data_16_date = None
-        try:
-            # Parse as dd/mm/yyyy
-            data_16_date = datetime.strptime(data_16_str, '%d/%m/%Y')
-        except:
-            pass
+        
+        if data_16_str and data_16_str != 'nan':
+            # Try multiple date formats
+            for fmt in ['%d/%m/%Y', '%m/%d/%Y', '%Y-%m-%d', '%d-%m-%Y']:
+                try:
+                    data_16_date = datetime.strptime(data_16_str, fmt)
+                    break
+                except:
+                    continue
+            
+            # If still None, try pandas
+            if data_16_date is None:
+                try:
+                    data_16_date = pd.to_datetime(data_16_str, dayfirst=True)
+                    if hasattr(data_16_date, 'to_pydatetime'):
+                        data_16_date = data_16_date.to_pydatetime()
+                except:
+                    pass
         
         # Determine branch for region mapping
         branch = self._get_branch(row)
@@ -409,11 +459,18 @@ class GiftTransformer:
             payment_method = ''
         
         # Check if this is a NEW recurring gift (Campaign Data 16 date = Campaign Date)
+        # Compare just the day of month since recurring gifts process on same day each month
         is_new_recurring = False
-        if campaign_date and data_16_date:
-            is_new_recurring = (campaign_date.date() == data_16_date.date())
+        if campaign_date is not None and data_16_date is not None:
+            # Compare full dates - if the start date matches the gift date, it's a new recurring
+            try:
+                cd_date = campaign_date.date() if hasattr(campaign_date, 'date') else campaign_date
+                d16_date = data_16_date.date() if hasattr(data_16_date, 'date') else data_16_date
+                is_new_recurring = (cd_date == d16_date)
+            except:
+                pass
         
-        if is_new_recurring and campaign_date:
+        if is_new_recurring and campaign_date is not None:
             # New recurring gift - populate all monthly donor fields
             status = 'Active'
             status_date = campaign_date.strftime('%Y-%m-%d')
