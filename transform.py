@@ -202,19 +202,22 @@ class GiftTransformer:
         
         # Name fields
         output_df['First Name'] = self._safe_column(df, 'First Name')
-        output_df['Nickname'] = self._safe_column(df, 'First Name')  # Same as First Name
+        output_df['Nickname'] = ''  # Will be Excel formula =First Name
         output_df['Middle Name'] = self._safe_column(df, 'Middle Name')
         output_df['Last Name'] = self._safe_column(df, 'Last Name')
         
         # Spouse name parsing from Partner Name
+        # First, let's log what column names are available for debugging
+        available_partner_cols = [c for c in df.columns if any(x in c.lower() for x in ['partner', 'spouse'])]
+        
         for idx, row in df.iterrows():
             spouse_first, spouse_middle, spouse_last = self._parse_spouse_name(row)
             output_df.loc[idx, 'Spouse First Name'] = spouse_first
             output_df.loc[idx, 'Spouse Middle Name'] = spouse_middle
             output_df.loc[idx, 'Spouse Last Name'] = spouse_last
         
-        # Spouse Nickname (same as Spouse First Name)
-        output_df['Spouse Nickname'] = output_df['Spouse First Name']
+        # Spouse Nickname - will be Excel formula =Spouse First Name
+        output_df['Spouse Nickname'] = ''
         
         # Addressee, Salutation - These will be EXCEL FORMULAS injected in the Excel export
         # Placeholder values here, actual formulas added in create_excel_output
@@ -449,11 +452,21 @@ class GiftTransformer:
         valid_mask = valid_mask | success_mask
         
         # Pending status for FBS, FBR, PFBS, PFBR (bank transactions)
+        # BUT NOT if Campaign Data 12 contains PayPal - those go to exceptions
+        has_paypal = df['Campaign Data 12'].str.contains('paypal', case=False, na=False) if 'Campaign Data 12' in df.columns else pd.Series([False] * len(df), index=df.index)
+        
         pending_mask = (
             df['Campaign Type'].isin(self.VALID_PENDING_TYPES) & 
-            (df['Campaign Status'] == 'pending')
+            (df['Campaign Status'] == 'pending') &
+            (~has_paypal)  # Exclude PayPal pending transactions
         )
         valid_mask = valid_mask | pending_mask
+        
+        # Include QCB records with Campaign ID = "General Opt-In" for biographical data
+        qcb_mask = pd.Series([False] * len(df), index=df.index)
+        if 'Campaign ID' in df.columns:
+            qcb_mask = (df['Campaign Type'] == 'QCB') & (df['Campaign ID'] == 'General Opt-In')
+        valid_mask = valid_mask | qcb_mask
         
         # Track exceptions (reject or change status)
         exception_mask = (
@@ -468,6 +481,20 @@ class GiftTransformer:
                 'Campaign Status': df.loc[idx, 'Campaign Status'],
                 'Campaign ID': df.loc[idx, 'Campaign ID'] if 'Campaign ID' in df.columns else '',
                 'Reason': 'Rejected or Changed Status'
+            })
+        
+        # Track pending PayPal transactions as exceptions
+        pending_paypal_mask = (
+            df['Campaign Status'] == 'pending'
+        ) & has_paypal
+        
+        for idx in df[pending_paypal_mask].index:
+            self.exceptions.append({
+                'EN Transaction ID': df.loc[idx, 'EN Transaction ID'] if 'EN Transaction ID' in df.columns else '',
+                'Campaign Type': df.loc[idx, 'Campaign Type'],
+                'Campaign Status': df.loc[idx, 'Campaign Status'],
+                'Campaign ID': df.loc[idx, 'Campaign ID'] if 'Campaign ID' in df.columns else '',
+                'Reason': 'Pending PayPal Transaction'
             })
         
         # Filter to valid records first
@@ -774,25 +801,32 @@ class GiftTransformer:
         Parse spouse name from Partner Name field.
         
         Logic:
-        - IF Partner Name contains #, extract spouse info
-        - Spouse First Name = text before first space
-        - IF second part is single letter or letter+period, it's Spouse Middle Name
-        - Spouse Last Name = remaining text, or primary Last Name if none
-        - IF Spouse First = First AND Spouse Last = Last, clear all spouse fields
+        - IF Partner Name contains #, write exact to start parsing
+        - Spouse First Name = TEXTBEFORE first " "
+        - IF second part is single letter or letter+period, write to Spouse Middle Name
+        - IF TEXTAFTER (middle name or " ") <>"" THEN Spouse Last Name = TEXTAFTER, ELSE Spouse Last Name = Last Name
+        - IF Spouse First Name = First Name and Spouse Last Name = Last Name, clear all three fields
         """
-        partner_name = str(row.get('Partner Name', ''))
-        first_name = str(row.get('First Name', ''))
-        last_name = str(row.get('Last Name', ''))
+        # Try multiple possible column names for Partner Name
+        partner_name = ''
+        for col_name in ['Partner Name', 'PartnerName', 'Spouse Name', 'SpouseName', 'Partner']:
+            val = row.get(col_name, '')
+            if val and str(val).strip() and str(val).strip() != 'nan':
+                partner_name = str(val).strip()
+                break
+        
+        first_name = str(row.get('First Name', '')).strip()
+        last_name = str(row.get('Last Name', '')).strip()
         
         spouse_first = ''
         spouse_middle = ''
         spouse_last = ''
         
-        # Check if partner name contains #
-        if '#' not in partner_name or not partner_name.strip():
+        # Check if partner name contains # - this indicates spouse info
+        if '#' not in partner_name or not partner_name:
             return (spouse_first, spouse_middle, spouse_last)
         
-        # Remove the # and parse
+        # Remove the # and parse - the # indicates this IS spouse data
         partner_name = partner_name.replace('#', '').strip()
         
         if not partner_name:
@@ -801,6 +835,7 @@ class GiftTransformer:
         parts = partner_name.split()
         
         if len(parts) >= 1:
+            # Spouse First Name = TEXTBEFORE first " "
             spouse_first = parts[0]
         
         if len(parts) >= 2:
@@ -810,11 +845,14 @@ class GiftTransformer:
                                 (len(second_part) == 2 and second_part.endswith('.')))
             
             if is_middle_initial:
+                # IF single letter or single letter + "." then write to Spouse Middle Name
                 spouse_middle = second_part.rstrip('.')
                 if len(parts) >= 3:
+                    # Spouse Last Name = remaining text after middle name
                     spouse_last = ' '.join(parts[2:])
                 else:
-                    spouse_last = last_name  # Use primary last name
+                    # No last name provided after middle initial, use primary last name
+                    spouse_last = last_name
             else:
                 # No middle initial, rest is last name
                 spouse_last = ' '.join(parts[1:])
@@ -822,7 +860,7 @@ class GiftTransformer:
             # Only first name provided, use primary last name
             spouse_last = last_name
         
-        # If spouse name matches primary name exactly, clear all fields
+        # IF Spouse First Name = First Name and Spouse Last Name = Last Name, clear all three fields
         if spouse_first == first_name and spouse_last == last_name:
             return ('', '', '')
         
