@@ -602,7 +602,7 @@ class GiftTransformer:
                     if api_debug.get('error'):
                         debug_entry['API Error'] = api_debug.get('error')
                     
-                    debug_entry['RE API Response'] = gifts_found if gifts_found else 'Empty'
+                    debug_entry['RE API Response'] = str(gifts_found) if gifts_found else 'Empty'
                     
                     if gifts_found and len(gifts_found) > 0:
                         # Format: "date - $amount" with line breaks
