@@ -31,6 +31,22 @@ class GiftTransformer:
         '1067': 'Wyoming - Food Bank of the Rockies Virtual Food Drives'
     }
     
+    # Column order for output
+    COLUMN_ORDER = [
+        'Key Indicator', 'Fund ID', 'Engaging Networks ID', 'Constituent ID', 'Org Name',
+        'First Name', 'Nickname', 'Middle Name', 'Last Name', 'Spouse First Name',
+        'Spouse Middle Name', 'Spouse Last Name', 'Spouse Nickname', 'Address', 'City', 'State', 'ZIP',
+        'Country', 'E-mail', 'Cell', 'EN Transaction ID', 'Gift Date', 'GL Post Date',
+        'Gift Amount', 'Donation Type', 'Gifts Last Month', 'EN Donation Form Name', 'Branch',
+        'Gift Reference', 'Campaign', 'Appeal ID', 'Package', 'Gift Subtype', 'Addressee',
+        'Spouse Addressee', 'Salutation', 'Spouse Salutation', 'Monthly Donor Status Description',
+        'Monthly Donor Status Date', 'Monthly Donor Anniversary Description', 'Monthly Donor Anniversary Date',
+        'Monthly Donor Annual Statement Type', 'Monthly Donor Channel', 'Monthly Donor Payment Method',
+        'Monthly Donor Region', 'EN Campaign ID', 'EN Campaign Name', 'Solicitor',
+        'EN Fundraising Page ID', 'EN Fundraising Page Name', 'Credit Type', 'Stripe Transaction ID',
+        'Requests no email?'
+    ]
+    
     def __init__(self):
         self.exceptions = []
         self.p2p_pending = []
@@ -58,10 +74,11 @@ class GiftTransformer:
         df = df.copy()
         
         # Build QCB lookup for "Requests no email?" field
-        # QCB records: Campaign Status = "Y" means FALSE (opted in), else TRUE (opted out)
+        # Only look at QCB records with Campaign ID = "General Opt-In"
+        # Campaign Status = "Y" means FALSE (opted in), else TRUE (opted out)
         qcb_lookup = {}
-        if 'Campaign Type' in df.columns and 'Supporter ID' in df.columns:
-            qcb_df = df[df['Campaign Type'] == 'QCB'].copy()
+        if 'Campaign Type' in df.columns and 'Supporter ID' in df.columns and 'Campaign ID' in df.columns:
+            qcb_df = df[(df['Campaign Type'] == 'QCB') & (df['Campaign ID'] == 'General Opt-In')].copy()
             for idx, row in qcb_df.iterrows():
                 supporter_id = str(row.get('Supporter ID', '')).strip()
                 if supporter_id:
@@ -269,8 +286,32 @@ class GiftTransformer:
         else:
             output_df['Cell'] = ''
         
-        # Credit Type: Campaign Data 6
-        output_df['Credit Type'] = self._safe_column(df, 'Campaign Data 6')
+        # Credit Type: Transform Campaign Data 6
+        # Mastercard if CONTAINS(mastercard), Paypal if CONTAINS(paypal), Visa if CONTAINS(visa),
+        # American Express if CONTAINS(amex), ACH if CONTAINS(ach) or CONTAINS(debit), Discover if CONTAINS(discover)
+        def transform_credit_type(val):
+            if pd.isna(val) or str(val).strip() == '':
+                return ''
+            val_lower = str(val).lower()
+            if 'mastercard' in val_lower:
+                return 'Mastercard'
+            elif 'paypal' in val_lower:
+                return 'Paypal'
+            elif 'visa' in val_lower:
+                return 'Visa'
+            elif 'amex' in val_lower:
+                return 'American Express'
+            elif 'ach' in val_lower or 'debit' in val_lower:
+                return 'ACH'
+            elif 'discover' in val_lower:
+                return 'Discover'
+            else:
+                return str(val)
+        
+        if 'Campaign Data 6' in df.columns:
+            output_df['Credit Type'] = df['Campaign Data 6'].apply(transform_credit_type)
+        else:
+            output_df['Credit Type'] = ''
         
         # Gift Reference: From FIM/PFIM tribute matching
         output_df['Gift Reference'] = df['EN Transaction ID'].apply(
@@ -291,10 +332,47 @@ class GiftTransformer:
         org_mask = output_df['Org Name'].notna() & (output_df['Org Name'] != '')
         output_df.loc[org_mask, 'Key Indicator'] = 'O'
         
+        # Format dates to mm/dd/yyyy
+        date_columns = ['Gift Date', 'GL Post Date', 'Monthly Donor Status Date', 'Monthly Donor Anniversary Date']
+        for date_col in date_columns:
+            if date_col in output_df.columns:
+                output_df[date_col] = output_df[date_col].apply(self._format_date)
+        
+        # Reorder columns to match COLUMN_ORDER
+        # Add any missing columns with empty values
+        for col in self.COLUMN_ORDER:
+            if col not in output_df.columns:
+                output_df[col] = ''
+        
+        # Reorder
+        ordered_cols = [col for col in self.COLUMN_ORDER if col in output_df.columns]
+        # Add any extra columns not in COLUMN_ORDER at the end
+        extra_cols = [col for col in output_df.columns if col not in self.COLUMN_ORDER]
+        output_df = output_df[ordered_cols + extra_cols]
+        
         # Create exceptions dataframe
         exceptions_df = pd.DataFrame(self.exceptions) if self.exceptions else pd.DataFrame()
         
         return output_df, exceptions_df, self.p2p_pending
+    
+    def _format_date(self, date_val):
+        """Format date value to mm/dd/yyyy"""
+        if pd.isna(date_val) or str(date_val).strip() == '':
+            return ''
+        try:
+            # Try to parse the date
+            date_str = str(date_val).strip()
+            # Handle common formats
+            for fmt in ['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%Y/%m/%d']:
+                try:
+                    dt = datetime.strptime(date_str[:10], fmt)
+                    return dt.strftime('%m/%d/%Y')
+                except:
+                    pass
+            # If it's already in the right format or can't be parsed, return as is
+            return date_str
+        except:
+            return str(date_val)
     
     def _safe_column(self, df: pd.DataFrame, col_name: str, fallback_col: str = None) -> pd.Series:
         """Safely get a column, returning empty strings if not found"""
