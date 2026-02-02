@@ -117,8 +117,8 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
             if header == 'Addressee' and 'Last Name' in col_letters and 'Spouse Last Name' in col_letters:
                 ln_col = col_letters['Last Name']
                 sln_col = col_letters['Spouse Last Name']
-                # Formula: =IFS(LastName=SpouseLastName,49,LastName<>SpouseLastName,48)
-                formula = f'=IFS({ln_col}{r_idx}={sln_col}{r_idx},49,{ln_col}{r_idx}<>{sln_col}{r_idx},48)'
+                # Formula: =IF(LastName=SpouseLastName,49,48)
+                formula = f'=IF({ln_col}{r_idx}={sln_col}{r_idx},49,48)'
                 ws_main.cell(row=r_idx, column=c_idx, value=formula)
             
             elif header == 'Spouse Addressee' and 'Addressee' in col_letters and 'Spouse Last Name' in col_letters:
@@ -139,6 +139,18 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
                 sln_col = col_letters['Spouse Last Name']
                 # Formula: =IF(SpouseLastName<>"",Salutation,"")
                 formula = f'=IF({sln_col}{r_idx}<>"",{sal_col}{r_idx},"")'
+                ws_main.cell(row=r_idx, column=c_idx, value=formula)
+            
+            elif header == 'Nickname' and 'First Name' in col_letters:
+                fn_col = col_letters['First Name']
+                # Formula: =FirstName
+                formula = f'={fn_col}{r_idx}'
+                ws_main.cell(row=r_idx, column=c_idx, value=formula)
+            
+            elif header == 'Spouse Nickname' and 'Spouse First Name' in col_letters:
+                sfn_col = col_letters['Spouse First Name']
+                # Formula: =SpouseFirstName
+                formula = f'={sfn_col}{r_idx}'
                 ws_main.cell(row=r_idx, column=c_idx, value=formula)
             
             else:
@@ -188,7 +200,7 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
             CellIsRule(operator='equal', formula=['"CHECK"'], fill=yellow_fill)
         )
     
-    # Highlight RE Constituent ID and Appeal ID if Key Indicator = "O"
+    # Highlight RE Constituent ID and Fund ID if Key Indicator = "O"
     if "Key Indicator" in col_letters:
         ki_letter = col_letters["Key Indicator"]
         
@@ -199,8 +211,8 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
                 FormulaRule(formula=[f'AND(${ki_letter}2="O",{col_letter}2="")'], fill=red_fill)
             )
         
-        if "Appeal ID" in col_letters:
-            col_letter = col_letters["Appeal ID"]
+        if "Fund ID" in col_letters:
+            col_letter = col_letters["Fund ID"]
             ws_main.conditional_formatting.add(
                 f'{col_letter}2:{col_letter}{len(df)+1}',
                 FormulaRule(formula=[f'AND(${ki_letter}2="O",{col_letter}2="")'], fill=red_fill)
@@ -568,6 +580,21 @@ if check_password():
                         st.error(f"Transformation error: {e}")
                         import traceback
                         st.code(traceback.format_exc())
+            
+            # Show partner/spouse column names to help debug spouse parsing
+            with st.expander("🔍 Debug: Partner/Spouse Column Names"):
+                cols = list(st.session_state.raw_df.columns)
+                partner_cols = [c for c in cols if any(x in c.lower() for x in ['partner', 'spouse'])]
+                if partner_cols:
+                    st.write("**Found these columns that might contain spouse/partner data:**")
+                    st.write(partner_cols)
+                    st.write("**Sample values (first 5 rows):**")
+                    sample_df = st.session_state.raw_df[partner_cols].head()
+                    st.dataframe(sample_df)
+                else:
+                    st.warning("No columns found matching 'partner' or 'spouse'. Please tell me the exact column name.")
+                    st.write("**All column names:**")
+                    st.write(cols)
             
             # # DEBUG SECTION - Commented out for production
             # # Show input column names for debugging
