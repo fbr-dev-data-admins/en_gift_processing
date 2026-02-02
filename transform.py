@@ -74,7 +74,7 @@ class GiftTransformer:
         if 'Campaign Type' in df.columns:
             pftc_df = df[df['Campaign Type'] == self.P2P_CREATOR_TYPE].copy()
             for idx, row in pftc_df.iterrows():
-                self._handle_pftc_record(row, p2p_config, re_api)
+                self._handle_pftc_record(row, p2p_config, re_api, row_number=idx)
         
         # Step 2: Filter by campaign type and status
         df = self._filter_by_status(df)
@@ -117,11 +117,11 @@ class GiftTransformer:
                 appeal = form_config.get('appeal', '')
                 fund = form_config.get('fund', '')
                 
-                # Campaign = fiscal_year_designation (e.g., "FY26"), EXCEPT CCDEN forms get "CCDEN"
+                # Campaign = "FY" + fiscal_year_designation (e.g., "FY" + "26" = "FY26"), EXCEPT CCDEN forms get "CCDEN"
                 if form_name.startswith('CCDEN') or (appeal and appeal.startswith('CCDEN')):
                     campaign = 'CCDEN'
                 else:
-                    campaign = fy_designation  # e.g., "FY26"
+                    campaign = 'FY' + fy_designation if fy_designation else ''  # e.g., "FY26"
                 
                 # Prepend fiscal year designation to Appeal EXCEPT for appeals starting with CCDEN
                 if appeal and not appeal.startswith('CCDEN'):
@@ -160,7 +160,7 @@ class GiftTransformer:
         
         # P2P Fields (for PFCS, PFCR, PFBS, PFBR)
         for idx, row in df.iterrows():
-            p2p_fields = self._get_p2p_fields(row, p2p_config)
+            p2p_fields = self._get_p2p_fields(row, p2p_config, row_number=idx)
             output_df.loc[idx, 'EN Fundraising Page ID'] = p2p_fields[0]
             output_df.loc[idx, 'EN Fundraising Page Name'] = p2p_fields[1]
             output_df.loc[idx, 'EN Campaign ID'] = p2p_fields[2]
@@ -305,7 +305,7 @@ class GiftTransformer:
         else:
             return pd.Series([''] * len(df), index=df.index)
     
-    def _handle_pftc_record(self, row: pd.Series, p2p_config: dict, re_api) -> None:
+    def _handle_pftc_record(self, row: pd.Series, p2p_config: dict, re_api, row_number: int = None) -> None:
         """Handle PFTC (P2P page creator) records for solicitor matching"""
         campaign_number = str(row.get('Campaign Number', ''))
         
@@ -345,11 +345,12 @@ class GiftTransformer:
         
         # Add to pending list for user review
         self.p2p_pending.append({
+            'row_number': row_number,
             'campaign_number': campaign_number,
             'campaign_type': 'PFTC',
             'campaign_data_6': row.get('Campaign Data 6', ''),
             'campaign_data_7': row.get('Campaign Data 7', ''),
-            'campaign_data_10': row.get('Campaign Data 10', ''),  # Name
+            'campaign_data_10': row.get('Campaign Data 10', ''),  # Name / EN Campaign Name
             'campaign_data_11': campaign_data_11,  # Email
             'system_record_id': system_record_id,
             're_match': re_match
@@ -637,7 +638,7 @@ class GiftTransformer:
         return (status, status_date, anniversary_desc, anniversary_date, 
                 statement_type, channel, payment_method, region, gifts_last_month)
     
-    def _get_p2p_fields(self, row: pd.Series, p2p_config: dict) -> tuple:
+    def _get_p2p_fields(self, row: pd.Series, p2p_config: dict, row_number: int = None) -> tuple:
         """Get P2P fundraising fields for PFCS, PFCR, PFBS, PFBR campaign types"""
         campaign_type = str(row.get('Campaign Type', ''))
         
@@ -675,8 +676,11 @@ class GiftTransformer:
                         break
                 
                 self.p2p_pending.append({
+                    'row_number': row_number,
                     'campaign_number': campaign_number,
                     'campaign_type': campaign_type,
+                    'page_id': data_15,  # EN Fundraising Page ID
+                    'page_name': page_name,
                     'campaign_data_6': row.get('Campaign Data 6', ''),
                     'campaign_data_7': row.get('Campaign Data 7', ''),
                     'campaign_data_10': row.get('Campaign Data 10', ''),
