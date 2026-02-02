@@ -784,6 +784,7 @@ class GiftTransformer:
                     'row_number': row_number,
                     'campaign_number': campaign_number,
                     'campaign_type': campaign_type,
+                    'campaign_id': str(row.get('Campaign ID', '')),  # Region page (form name)
                     'page_id': data_15,  # EN Fundraising Page ID
                     'page_name': page_name,
                     'campaign_data_6': row.get('Campaign Data 6', ''),
@@ -807,16 +808,24 @@ class GiftTransformer:
         - IF TEXTAFTER (middle name or " ") <>"" THEN Spouse Last Name = TEXTAFTER, ELSE Spouse Last Name = Last Name
         - IF Spouse First Name = First Name and Spouse Last Name = Last Name, clear all three fields
         """
-        # Try multiple possible column names for Partner Name
+        # Get Partner Name - try direct access first, then alternatives
         partner_name = ''
-        for col_name in ['Partner Name', 'PartnerName', 'Spouse Name', 'SpouseName', 'Partner']:
-            val = row.get(col_name, '')
-            if val and str(val).strip() and str(val).strip() != 'nan':
+        if 'Partner Name' in row.index:
+            val = row['Partner Name']
+            if pd.notna(val) and str(val).strip():
                 partner_name = str(val).strip()
-                break
         
-        first_name = str(row.get('First Name', '')).strip()
-        last_name = str(row.get('Last Name', '')).strip()
+        # If not found, try alternative column names
+        if not partner_name:
+            for col_name in ['PartnerName', 'Spouse Name', 'SpouseName', 'Partner']:
+                if col_name in row.index:
+                    val = row[col_name]
+                    if pd.notna(val) and str(val).strip():
+                        partner_name = str(val).strip()
+                        break
+        
+        first_name = str(row.get('First Name', '')).strip() if pd.notna(row.get('First Name', '')) else ''
+        last_name = str(row.get('Last Name', '')).strip() if pd.notna(row.get('Last Name', '')) else ''
         
         spouse_first = ''
         spouse_middle = ''
