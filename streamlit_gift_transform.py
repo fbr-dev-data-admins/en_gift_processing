@@ -118,8 +118,7 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
                 ln_col = col_letters['Last Name']
                 sln_col = col_letters['Spouse Last Name']
                 # Formula: =IFS(LastName=SpouseLastName,49,LastName<>SpouseLastName,48)
-                # But we need to handle empty spouse last name
-                formula = f'=IF({sln_col}{r_idx}="","",IFS({ln_col}{r_idx}={sln_col}{r_idx},49,{ln_col}{r_idx}<>{sln_col}{r_idx},48))'
+                formula = f'=IFS({ln_col}{r_idx}={sln_col}{r_idx},49,{ln_col}{r_idx}<>{sln_col}{r_idx},48)'
                 ws_main.cell(row=r_idx, column=c_idx, value=formula)
             
             elif header == 'Spouse Addressee' and 'Addressee' in col_letters and 'Spouse Last Name' in col_letters:
@@ -609,21 +608,7 @@ if check_password():
                 if st.session_state.p2p_pending and len(st.session_state.p2p_pending) > 0:
                     st.error(f"⛔ **Cannot generate working file:** {len(st.session_state.p2p_pending)} P2P records need matching first. Please complete P2P matching in Tab 3 before exporting.")
                 else:
-                    st.warning("⚠️ **Important:** Download the working file below, then use the VBA macro (GiftImportProcessor.bas) to complete final processing before RE import.")
-                    st.info("""
-                    **VBA Macro Steps:**
-                    1. Open the downloaded Excel file
-                    2. Press Alt+F11 to open VBA Editor
-                    3. File → Import File → Select GiftImportProcessor.bas
-                    4. Close VBA Editor and Save As .xlsm
-                    5. Run macro: Alt+F8 → ProcessGiftImport → Run
-                    
-                    The macro will:
-                    - Validate Key Indicator = "O" records have RE Constituent ID
-                    - Clear personal info for organization records
-                    - Remove working columns
-                    - Export final import file
-                    """)
+                    st.warning("⚠️ **Important:** Download the working file below, then use VBA macro stored at {file path} to complete final processing before RE import.")
                     
                     if st.button("📊 Generate Working Excel", type="primary"):
                         excel_buffer = create_excel_output(
