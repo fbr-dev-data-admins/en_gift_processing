@@ -581,21 +581,6 @@ if check_password():
                         import traceback
                         st.code(traceback.format_exc())
             
-            # Show partner/spouse column names to help debug spouse parsing
-            with st.expander("🔍 Debug: Partner/Spouse Column Names"):
-                cols = list(st.session_state.raw_df.columns)
-                partner_cols = [c for c in cols if any(x in c.lower() for x in ['partner', 'spouse'])]
-                if partner_cols:
-                    st.write("**Found these columns that might contain spouse/partner data:**")
-                    st.write(partner_cols)
-                    st.write("**Sample values (first 5 rows):**")
-                    sample_df = st.session_state.raw_df[partner_cols].head()
-                    st.dataframe(sample_df)
-                else:
-                    st.warning("No columns found matching 'partner' or 'spouse'. Please tell me the exact column name.")
-                    st.write("**All column names:**")
-                    st.write(cols)
-            
             # # DEBUG SECTION - Commented out for production
             # # Show input column names for debugging
             # with st.expander("📋 Input Data Column Names (click to debug missing fields)"):
@@ -721,19 +706,22 @@ if check_password():
                                     st.success("Manual match saved!")
                                     st.rerun()
                 else:
-                    # PFCS, PFCR, PFBS, PFBR: Show campaign number, page info, and message
+                    # PFCS, PFCR, PFBS, PFBR: Show campaign number, region page, and message
                     with st.expander(f"{campaign_type} Record - Row {record.get('row_number', 'N/A')}: Campaign {record.get('campaign_number', '')}"):
                         st.subheader("P2P Gift Details")
                         st.write(f"**Row Number:** {record.get('row_number', '')}")
                         st.write(f"**Campaign Number:** {record.get('campaign_number', '')}")
                         st.write(f"**Campaign Type:** {campaign_type}")
-                        st.write(f"**Page ID:** {record.get('page_id', '')}")
-                        st.write(f"**Page Name:** {record.get('page_name', '')}")
+                        st.write(f"**Region Page:** {record.get('campaign_id', '')}")
                         
                         st.info("""
-                        **Please look up additional details in the P2P module for this region:**
-                        
-                        Peer-to-Peer → Sites → Edit identified site (square and pencil) → Fundraisers → Match on Page ID → Input Page Name and the identified solicitor RE Constituent ID
+**Please look up additional details in the P2P module for this region:**
+
+Peer-to-Peer → Sites → Edit identified site (square and pencil) → Teams → Match on Page ID → Input Page Name and the identified solicitor RE Constituent ID
+
+or if not found there:
+
+Peer-to-Peer → Sites → Edit identified site (square and pencil) → Fundraisers → Match on Page ID → Input Page Name and the identified solicitor RE Constituent ID
                         """)
                         
                         # Manual entry - both RE Constituent ID AND EN Campaign Name for non-PFTC
