@@ -35,7 +35,7 @@ class GiftTransformer:
     COLUMN_ORDER = [
         'Key Indicator', 'Fund ID', 'Engaging Networks ID', 'Constituent ID', 'Org Name',
         'First Name', 'Nickname', 'Middle Name', 'Last Name', 'Spouse First Name',
-        'Spouse Middle Name', 'Spouse Last Name', 'Spouse Nickname', 'Address', 'City', 'State', 'ZIP',
+        'Spouse Nickname', 'Spouse Middle Name', 'Spouse Last Name', 'Address', 'City', 'State', 'ZIP',
         'Country', 'E-mail', 'Cell', 'EN Transaction ID', 'Gift Date', 'GL Post Date',
         'Gift Amount', 'Donation Type', 'Gifts Last Month', 'EN Donation Form Name', 'Branch',
         'Gift Reference', 'Campaign', 'Appeal ID', 'Package', 'Gift Subtype', 'Addressee',
@@ -46,6 +46,33 @@ class GiftTransformer:
         'EN Fundraising Page ID', 'EN Fundraising Page Name', 'Credit Type', 'Stripe Transaction ID',
         'Requests no email?'
     ]
+    
+    # Columns to fill for QCB (opt-in/out) records - biographical info only
+    QCB_COLUMNS = [
+        'Engaging Networks ID', 'Constituent ID', 'Org Name', 'First Name', 'Nickname', 'Middle Name', 'Last Name',
+        'Spouse First Name', 'Spouse Nickname', 'Spouse Middle Name', 'Spouse Last Name',
+        'Address', 'City', 'State', 'ZIP', 'Country', 'E-mail', 'Cell',
+        'Addressee', 'Spouse Addressee', 'Salutation', 'Spouse Salutation', 'Requests no email?'
+    ]
+    
+    def _clean_id(self, val) -> str:
+        """Clean an ID value - remove decimal places from floats, handle NaN"""
+        if val is None or pd.isna(val):
+            return ''
+        val_str = str(val).strip()
+        if val_str == 'nan' or val_str == '':
+            return ''
+        # Remove .0 decimal from float representation
+        if val_str.endswith('.0'):
+            val_str = val_str[:-2]
+        # Also handle cases like 202668.0 by trying to convert to int
+        try:
+            float_val = float(val_str)
+            if float_val == int(float_val):
+                return str(int(float_val))
+        except (ValueError, TypeError):
+            pass
+        return val_str
     
     def __init__(self):
         self.exceptions = []
@@ -190,15 +217,25 @@ class GiftTransformer:
         output_df['Gift Date'] = self._safe_column(df, 'Campaign Date')
         output_df['GL Post Date'] = self._safe_column(df, 'Campaign Date')
         output_df['Stripe Transaction ID'] = self._safe_column(df, 'Campaign Data 2')
-        output_df['Engaging Networks ID'] = self._safe_column(df, 'Supporter ID')
+        
+        # Engaging Networks ID - clean to remove .0 from float values
+        en_id_col = self._safe_column(df, 'Supporter ID')
+        output_df['Engaging Networks ID'] = en_id_col.apply(self._clean_id)
         
         # Org Name (working column, removed in final export)
         output_df['Org Name'] = self._safe_column(df, 'Company/Org Name', 
                                   fallback_col='Company Name')
         
-        # Constituent ID
-        output_df['Constituent ID'] = self._safe_column(df, 'Raisers Edge Constituent ID',
-                                       fallback_col='RE Constituent ID')
+        # Constituent ID - try multiple column name variations
+        constituent_id_found = False
+        for col_name in ['Raisers Edge Constituent ID', 'RE Constituent ID', 'Raiser\'s Edge Constituent ID',
+                         'RE System Record ID', 'System Record ID', 'Constituent ID']:
+            if col_name in df.columns:
+                output_df['Constituent ID'] = df[col_name].fillna('').apply(self._clean_id)
+                constituent_id_found = True
+                break
+        if not constituent_id_found:
+            output_df['Constituent ID'] = ''
         
         # Name fields
         output_df['First Name'] = self._safe_column(df, 'First Name')
@@ -210,11 +247,20 @@ class GiftTransformer:
         # First, let's log what column names are available for debugging
         available_partner_cols = [c for c in df.columns if any(x in c.lower() for x in ['partner', 'spouse'])]
         
-        for idx, row in df.iterrows():
-            spouse_first, spouse_middle, spouse_last = self._parse_spouse_name(row)
-            output_df.loc[idx, 'Spouse First Name'] = spouse_first
-            output_df.loc[idx, 'Spouse Middle Name'] = spouse_middle
-            output_df.loc[idx, 'Spouse Last Name'] = spouse_last
+        # Check if Partner Name column exists
+        has_partner_name = 'Partner Name' in df.columns
+        
+        if has_partner_name:
+            for idx, row in df.iterrows():
+                spouse_first, spouse_middle, spouse_last = self._parse_spouse_name(row)
+                output_df.loc[idx, 'Spouse First Name'] = spouse_first
+                output_df.loc[idx, 'Spouse Middle Name'] = spouse_middle
+                output_df.loc[idx, 'Spouse Last Name'] = spouse_last
+        else:
+            # No Partner Name column - leave spouse fields empty
+            output_df['Spouse First Name'] = ''
+            output_df['Spouse Middle Name'] = ''
+            output_df['Spouse Last Name'] = ''
         
         # Spouse Nickname - will be Excel formula =Spouse First Name
         output_df['Spouse Nickname'] = ''
@@ -335,6 +381,16 @@ class GiftTransformer:
         org_mask = output_df['Org Name'].notna() & (output_df['Org Name'] != '')
         output_df.loc[org_mask, 'Key Indicator'] = 'O'
         
+        # For QCB records, clear all non-biographical columns
+        # QCB records only get: Engaging Networks ID, Org Name, First Name, Nickname, Middle Name, Last Name,
+        # Spouse First Name, Spouse Middle Name, Spouse Last Name, Spouse Nickname,
+        # Address, City, State, ZIP, Country, E-mail, Cell, Requests no email?
+        if 'Campaign Type' in df.columns:
+            qcb_indices = df[df['Campaign Type'] == 'QCB'].index
+            for col in output_df.columns:
+                if col not in self.QCB_COLUMNS:
+                    output_df.loc[qcb_indices, col] = ''
+        
         # Format dates to mm/dd/yyyy
         date_columns = ['Gift Date', 'GL Post Date', 'Monthly Donor Status Date', 'Monthly Donor Anniversary Date']
         for date_col in date_columns:
@@ -399,9 +455,10 @@ class GiftTransformer:
         for col_name in ['RE Constituent System Record ID', 'System Record ID', 'RE System Record ID', 'Raisers Edge Constituent ID', 
                          'RE Constituent ID', 'Raiser\'s Edge ID', 'RE ID', 
                          'SystemRecordID', 'RESystemRecordID']:
-            val = str(row.get(col_name, '')).strip()
-            if val and val != 'nan' and val != '':
-                system_record_id = val
+            val = row.get(col_name, '')
+            cleaned = self._clean_id(val)
+            if cleaned:
+                system_record_id = cleaned
                 break
         
         campaign_data_11 = str(row.get('Campaign Data 11', ''))  # Email
@@ -617,8 +674,9 @@ class GiftTransformer:
                          'RE Constituent ID', 'Raiser\'s Edge ID', 'RE ID', 'Constituent ID',
                          'SystemRecordID', 'RESystemRecordID', 'REID', 'RE_ID', 'Supporter ID']:
             val = row.get(col_name, '')
-            if val is not None and str(val).strip() and str(val).strip() != 'nan':
-                re_system_id = str(val).strip()
+            cleaned = self._clean_id(val)
+            if cleaned:
+                re_system_id = cleaned
                 re_id_col_found = col_name
                 break
         
@@ -750,8 +808,9 @@ class GiftTransformer:
         if campaign_type not in self.P2P_GIFT_TYPES:
             return ('', '', '', '', '')
         
-        # EN Fundraising Page ID = Campaign Data 15
-        data_15 = str(row.get('Campaign Data 15', ''))
+        # EN Fundraising Page ID = Campaign Data 15 (clean to remove .0)
+        data_15_raw = row.get('Campaign Data 15', '')
+        data_15 = self._clean_id(data_15_raw)
         
         # EN Fundraising Page Name from mapping
         page_name = self.FUNDRAISING_PAGE_MAPPING.get(data_15, '')
@@ -775,9 +834,10 @@ class GiftTransformer:
                 for col_name in ['RE Constituent System Record ID', 'System Record ID', 'RE System Record ID', 'Raisers Edge Constituent ID', 
                                  'RE Constituent ID', 'Raiser\'s Edge ID', 'RE ID', 
                                  'SystemRecordID', 'RESystemRecordID']:
-                    val = str(row.get(col_name, '')).strip()
-                    if val and val != 'nan' and val != '':
-                        system_record_id = val
+                    val = row.get(col_name, '')
+                    cleaned = self._clean_id(val)
+                    if cleaned:
+                        system_record_id = cleaned
                         break
                 
                 self.p2p_pending.append({
@@ -808,31 +868,35 @@ class GiftTransformer:
         - IF TEXTAFTER (middle name or " ") <>"" THEN Spouse Last Name = TEXTAFTER, ELSE Spouse Last Name = Last Name
         - IF Spouse First Name = First Name and Spouse Last Name = Last Name, clear all three fields
         """
-        # Get Partner Name - try direct access first, then alternatives
+        # Get Partner Name value directly from the Series
         partner_name = ''
+        
+        # Access using direct indexing since it's a pandas Series
         if 'Partner Name' in row.index:
             val = row['Partner Name']
-            if pd.notna(val) and str(val).strip():
+            if pd.notna(val):
                 partner_name = str(val).strip()
         
-        # If not found, try alternative column names
-        if not partner_name:
-            for col_name in ['PartnerName', 'Spouse Name', 'SpouseName', 'Partner']:
-                if col_name in row.index:
-                    val = row[col_name]
-                    if pd.notna(val) and str(val).strip():
-                        partner_name = str(val).strip()
-                        break
+        # Get first and last name for comparison
+        first_name = ''
+        last_name = ''
         
-        first_name = str(row.get('First Name', '')).strip() if pd.notna(row.get('First Name', '')) else ''
-        last_name = str(row.get('Last Name', '')).strip() if pd.notna(row.get('Last Name', '')) else ''
+        if 'First Name' in row.index:
+            val = row['First Name']
+            if pd.notna(val):
+                first_name = str(val).strip()
+        
+        if 'Last Name' in row.index:
+            val = row['Last Name']
+            if pd.notna(val):
+                last_name = str(val).strip()
         
         spouse_first = ''
         spouse_middle = ''
         spouse_last = ''
         
         # Check if partner name contains # - this indicates spouse info
-        if '#' not in partner_name or not partner_name:
+        if not partner_name or '#' not in partner_name:
             return (spouse_first, spouse_middle, spouse_last)
         
         # Remove the # and parse - the # indicates this IS spouse data
