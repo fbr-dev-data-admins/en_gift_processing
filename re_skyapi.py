@@ -339,10 +339,21 @@ class RESkyAPI:
             'error': None
         }
         
+        # Clean constituent_id - remove .0 from float values
+        clean_id = str(constituent_id).strip()
+        if clean_id.endswith('.0'):
+            clean_id = clean_id[:-2]
+        try:
+            float_val = float(clean_id)
+            if float_val == int(float_val):
+                clean_id = str(int(float_val))
+        except (ValueError, TypeError):
+            pass
+        
         # Build params for the gifts endpoint
         # Use /gift/v1/gifts with constituent_id, start_gift_date, end_gift_date
         params = {
-            'constituent_id': constituent_id,
+            'constituent_id': clean_id,
             'limit': 500
         }
         
