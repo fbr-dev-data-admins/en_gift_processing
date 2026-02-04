@@ -831,12 +831,34 @@ class GiftTransformer:
                     # debug_entry['RE API Response'] = str(gifts_found) if gifts_found else 'Empty'
                     
                     if gifts_found and len(gifts_found) > 0:
+                        # Get current transaction gift amount for comparison
+                        current_gift_amount = None
+                        try:
+                            current_amount_str = str(row.get('Campaign Data 4', '')).strip()
+                            if current_amount_str and current_amount_str != 'nan':
+                                current_gift_amount = float(current_amount_str)
+                        except:
+                            pass
+                        
                         # Format: "date - $amount" with line breaks
+                        # Append " - CHECK" if amount differs from current gift amount
                         gift_strings = []
                         for gift in gifts_found:
                             gift_date = gift.get('date', '')
                             gift_amount = gift.get('amount', '')
-                            gift_strings.append(f"{gift_date} - ${gift_amount}")
+                            
+                            # Check if amounts differ
+                            amount_check = ''
+                            if current_gift_amount is not None:
+                                try:
+                                    previous_amount = float(gift_amount) if gift_amount else 0.0
+                                    if abs(current_gift_amount - previous_amount) > 0.01:  # Allow for floating point precision
+                                        amount_check = ' - CHECK'
+                                except:
+                                    pass
+                            
+                            gift_strings.append(f"{gift_date} - ${gift_amount}{amount_check}")
+                        
                         gifts_last_month = '\n'.join(gift_strings)
                         # debug_entry['Gifts Last Month Result'] = f"Found {len(gifts_found)} gifts"
                     else:
