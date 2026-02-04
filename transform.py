@@ -236,7 +236,18 @@ class GiftTransformer:
         output_df['Org Name'] = self._safe_column(df, 'Company/Org Name', 
                                   fallback_col='Company Name')
         
-        output_df['Constituent ID'] = self._safe_column(df, 'Raisers Edge Constituent ID')
+        # Constituent ID - try multiple column name variations
+        constituent_id_found = False
+        for col_name in ['Raisers Edge Constituent ID', 'RE Constituent ID', 'Raiser\'s Edge Constituent ID',
+                         'RE System Record ID', 'System Record ID', 'Constituent ID']:
+            if col_name in df.columns:
+                output_df['Constituent ID'] = df[col_name].fillna('').apply(self._clean_id)
+                constituent_id_found = True
+                break
+        if not constituent_id_found:
+            output_df['Constituent ID'] = ''
+        
+        # Name fields
         output_df['First Name'] = self._safe_column(df, 'First Name')
         output_df['Nickname'] = ''  # Will be Excel formula =First Name
         output_df['Middle Name'] = self._safe_column(df, 'Middle Name')
@@ -868,10 +879,11 @@ class GiftTransformer:
         Parse spouse name from Partner Name field.
         
         Logic:
-        - IF Partner Name has any value, parse as spouse info
-        - Spouse First Name = TEXTBEFORE first " "
-        - IF second part is single letter or letter+period, write to Spouse Middle Name
-        - IF TEXTAFTER (middle name or " ") <>"" THEN Spouse Last Name = TEXTAFTER, ELSE Spouse Last Name = Last Name
+        - IF Partner Name contains a digit/number, write entire value to Spouse First Name (no parsing)
+        - Otherwise parse normally:
+          - Spouse First Name = TEXTBEFORE first " "
+          - IF second part is single letter or letter+period, write to Spouse Middle Name
+          - IF TEXTAFTER (middle name or " ") <>"" THEN Spouse Last Name = TEXTAFTER, ELSE Spouse Last Name = Last Name
         - IF Spouse First Name = First Name and Spouse Last Name = Last Name, clear all three fields
         """
         # Get Partner Name value directly from the Series
@@ -905,19 +917,15 @@ class GiftTransformer:
         if not partner_name:
             return (spouse_first, spouse_middle, spouse_last)
         
-        # Check if the partner name is just a number (like 123456789) - skip these
+        # Check if partner name contains any digit - if so, write entire value to Spouse First Name only
         import re as regex
-        if regex.match(r'^\d+$', partner_name):
-            return (spouse_first, spouse_middle, spouse_last)
+        if regex.search(r'\d', partner_name):
+            # Contains a digit - write entire value to Spouse First Name, leave others blank
+            spouse_first = partner_name
+            return (spouse_first, '', '')
         
-        # Remove any digits from the partner name before parsing
-        # The digits are just an indicator, not part of the actual name
-        partner_name_clean = regex.sub(r'\d+', '', partner_name).strip()
-        
-        if not partner_name_clean:
-            return (spouse_first, spouse_middle, spouse_last)
-        
-        parts = partner_name_clean.split()
+        # No digits - parse normally
+        parts = partner_name.split()
         
         if len(parts) >= 1:
             # Spouse First Name = TEXTBEFORE first " "
