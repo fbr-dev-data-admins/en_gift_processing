@@ -561,20 +561,20 @@ if check_password():
                         
                         # # DEBUG SECTION - Commented out for production
                         # # Show debug log for RE API calls (Gifts Last Month)
-                        if transformer.debug_log:
-                            with st.expander("🔍 Debug Log - Recurring Gift Lookups"):
-                                st.write(f"Total recurring gift records processed: {len(transformer.debug_log)}")
-                                debug_df = pd.DataFrame(transformer.debug_log)
-                                st.dataframe(debug_df)
-                                 
-                                 # Show first row's all column names to help debug
-                                if 'Campaign Type' in df.columns:
-                                    recurring_rows = df[df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])]
-                                    if len(recurring_rows) > 0:
-                                        st.write("**First recurring row - all columns with values:**")
-                                        first_row = recurring_rows.iloc[0]
-                                        non_empty = {k: v for k, v in first_row.items() if pd.notna(v) and str(v).strip() != ''}
-                                        st.json(non_empty)
+                        # if transformer.debug_log:
+                        #     with st.expander("🔍 Debug Log - Recurring Gift Lookups"):
+                        #         st.write(f"Total recurring gift records processed: {len(transformer.debug_log)}")
+                        #         debug_df = pd.DataFrame(transformer.debug_log)
+                        #         st.dataframe(debug_df)
+                        #         
+                        #         # Show first row's all column names to help debug
+                        #         if 'Campaign Type' in df.columns:
+                        #             recurring_rows = df[df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])]
+                        #             if len(recurring_rows) > 0:
+                        #                 st.write("**First recurring row - all columns with values:**")
+                        #                 first_row = recurring_rows.iloc[0]
+                        #                 non_empty = {k: v for k, v in first_row.items() if pd.notna(v) and str(v).strip() != ''}
+                        #                 st.json(non_empty)
                         
                     except Exception as e:
                         st.error(f"Transformation error: {e}")
@@ -587,6 +587,29 @@ if check_password():
             #     st.write("**Available columns in input data:**")
             #     cols = list(st.session_state.raw_df.columns)
             #     st.write(cols)
+            #     
+            #     # Show columns that might be RE ID
+            #     st.write("")
+            #     st.write("**Columns that might contain RE ID:**")
+            #     re_id_candidates = [c for c in cols if any(x in c.lower() for x in ['re', 'raiser', 'constituent', 'system', 'record'])]
+            #     if re_id_candidates:
+            #         st.write(re_id_candidates)
+            #         # Show sample values from these columns
+            #         st.write("**Sample values from potential RE ID columns (first 5 rows):**")
+            #         sample_df = st.session_state.raw_df[re_id_candidates].head()
+            #         st.dataframe(sample_df)
+            #     else:
+            #         st.warning("No columns found matching common RE ID patterns")
+            #     
+            #     # Show columns that might be ZIP, Email, Phone
+            #     st.write("")
+            #     st.write("**Columns that might contain ZIP/Email/Phone:**")
+            #     contact_candidates = [c for c in cols if any(x in c.lower() for x in ['zip', 'postal', 'email', 'phone', 'mobile', 'cell'])]
+            #     if contact_candidates:
+            #         st.write(contact_candidates)
+            #         st.write("**Sample values (first 5 rows):**")
+            #         sample_df = st.session_state.raw_df[contact_candidates].head()
+            #         st.dataframe(sample_df)
             
             # Export section
             st.divider()
