@@ -236,7 +236,7 @@ class GiftTransformer:
         output_df['Org Name'] = self._safe_column(df, 'Company/Org Name', 
                                   fallback_col='Company Name')
         
-        output_df['Raisers Edge Constituent ID'] = self._safe_column(df, 'Constituent ID')
+        output_df['Constituent ID'] = self._safe_column(df, 'Raisers Edge Constituent ID')
         output_df['First Name'] = self._safe_column(df, 'First Name')
         output_df['Nickname'] = ''  # Will be Excel formula =First Name
         output_df['Middle Name'] = self._safe_column(df, 'Middle Name')
