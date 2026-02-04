@@ -561,20 +561,20 @@ if check_password():
                         
                         # # DEBUG SECTION - Commented out for production
                         # # Show debug log for RE API calls (Gifts Last Month)
-                        if transformer.debug_log:
-                            with st.expander("🔍 Debug Log - Recurring Gift Lookups"):
-                                st.write(f"Total recurring gift records processed: {len(transformer.debug_log)}")
-                                debug_df = pd.DataFrame(transformer.debug_log)
-                                st.dataframe(debug_df)
-                                
-                                # Show first row's all column names to help debug
-                                if 'Campaign Type' in df.columns:
-                                    recurring_rows = df[df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])]
-                                    if len(recurring_rows) > 0:
-                                        st.write("**First recurring row - all columns with values:**")
-                                        first_row = recurring_rows.iloc[0]
-                                        non_empty = {k: v for k, v in first_row.items() if pd.notna(v) and str(v).strip() != ''}
-                                        st.json(non_empty)
+                        # if transformer.debug_log:
+                        #     with st.expander("🔍 Debug Log - Recurring Gift Lookups"):
+                        #         st.write(f"Total recurring gift records processed: {len(transformer.debug_log)}")
+                        #         debug_df = pd.DataFrame(transformer.debug_log)
+                        #         st.dataframe(debug_df)
+                        #         
+                        #         # Show first row's all column names to help debug
+                        #         if 'Campaign Type' in df.columns:
+                        #             recurring_rows = df[df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])]
+                        #             if len(recurring_rows) > 0:
+                        #                 st.write("**First recurring row - all columns with values:**")
+                        #                 first_row = recurring_rows.iloc[0]
+                        #                 non_empty = {k: v for k, v in first_row.items() if pd.notna(v) and str(v).strip() != ''}
+                        #                 st.json(non_empty)
                         
                     except Exception as e:
                         st.error(f"Transformation error: {e}")
@@ -605,20 +605,20 @@ if check_password():
                     if len(non_empty) > 0:
                         st.write(f"**Non-empty values:** {len(non_empty)}")
                         
-                        # Check for # character
-                        has_hash = non_empty[non_empty.astype(str).str.contains('#', na=False)]
-                        st.write(f"**Values containing '#':** {len(has_hash)}")
+                        # Check for digits (numbers) - this indicates spouse info
+                        has_digit = non_empty[non_empty.astype(str).str.contains(r'\d', na=False, regex=True)]
+                        st.write(f"**Values containing digits (will be parsed as spouse):** {len(has_digit)}")
                         
-                        if len(has_hash) > 0:
-                            st.write("**Sample Partner Name values with '#':**")
-                            for i, val in enumerate(has_hash.head(10)):
+                        if len(has_digit) > 0:
+                            st.write("**Sample Partner Name values with digits:**")
+                            for i, val in enumerate(has_digit.head(10)):
                                 st.write(f"  {i+1}. `{val}`")
                                 
                             # Test the parsing function directly
                             st.write("")
-                            st.write("**Testing spouse parsing on first row with '#':**")
-                            first_hash_idx = has_hash.index[0]
-                            test_row = st.session_state.raw_df.loc[first_hash_idx]
+                            st.write("**Testing spouse parsing on first row with digits:**")
+                            first_digit_idx = has_digit.index[0]
+                            test_row = st.session_state.raw_df.loc[first_digit_idx]
                             pn_val = test_row.get('Partner Name', '')
                             fn_val = test_row.get('First Name', '')
                             ln_val = test_row.get('Last Name', '')
@@ -626,7 +626,7 @@ if check_password():
                             st.write(f"  First Name: `{fn_val}`")
                             st.write(f"  Last Name: `{ln_val}`")
                         else:
-                            st.warning("⚠️ No Partner Name values contain '#' - spouse parsing requires '#' prefix!")
+                            st.warning("⚠️ No Partner Name values contain digits - spouse parsing requires a number in the field!")
                             st.write("**Sample Partner Name values (first 10):**")
                             for i, val in enumerate(non_empty.head(10)):
                                 st.write(f"  {i+1}. `{val}`")
