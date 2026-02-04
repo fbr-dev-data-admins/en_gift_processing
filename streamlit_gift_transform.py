@@ -85,6 +85,95 @@ def save_json_config(filepath: str, data: dict):
         json.dump(data, f, indent=2)
 
 
+def push_config_to_github(repo_url: str, file_path: str, data: dict, token: str, commit_message: str = "Update config") -> bool:
+    """
+    Push updated JSON config to GitHub repository.
+    
+    Args:
+        repo_url: GitHub repo URL (e.g., "https://github.com/username/repo")
+        file_path: Path to file within repo (e.g., "config/P2P.json")
+        data: Dictionary to save as JSON
+        token: GitHub personal access token
+        commit_message: Commit message for the update
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Extract owner/repo from URL
+        parts = repo_url.rstrip('/').split('/')
+        owner = parts[-2]
+        repo = parts[-1].replace('.git', '')
+        
+        # GitHub API endpoint
+        api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}"
+        
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+        
+        # Get current file to get its SHA (required for updates)
+        response = requests.get(api_url, headers=headers)
+        
+        if response.status_code == 200:
+            current_file = response.json()
+            sha = current_file['sha']
+        else:
+            # File doesn't exist, no SHA needed
+            sha = None
+        
+        # Prepare the update
+        import base64
+        content = json.dumps(data, indent=2)
+        encoded_content = base64.b64encode(content.encode()).decode()
+        
+        payload = {
+            "message": commit_message,
+            "content": encoded_content,
+            "branch": "main"
+        }
+        
+        if sha:
+            payload["sha"] = sha
+        
+        # Push to GitHub
+        response = requests.put(api_url, headers=headers, json=payload)
+        
+        return response.status_code in [200, 201]
+        
+    except Exception as e:
+        st.error(f"Failed to push to GitHub: {e}")
+        return False
+
+
+def save_config_with_github_sync(filepath: str, data: dict, github_repo: str = "", github_token: str = "", config_type: str = "config"):
+    """
+    Save config locally and optionally push to GitHub.
+    
+    Args:
+        filepath: Local file path
+        data: Dictionary to save
+        github_repo: GitHub repo URL (optional)
+        github_token: GitHub access token (optional)
+        config_type: Type of config for commit message
+    """
+    # Always save locally first
+    save_json_config(filepath, data)
+    
+    # Push to GitHub if configured
+    if github_repo and github_token:
+        success = push_config_to_github(
+            repo_url=github_repo,
+            file_path=filepath,
+            data=data,
+            token=github_token,
+            commit_message=f"Update {config_type} via Streamlit app"
+        )
+        if not success:
+            st.warning(f"⚠️ Saved locally but failed to push to GitHub. Check your token permissions.")
+
+
 def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) -> BytesIO:
     """Create Excel workbook with conditional formatting and formulas"""
     output = BytesIO()
@@ -149,8 +238,8 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
             
             elif header == 'Spouse Nickname' and 'Spouse First Name' in col_letters:
                 sfn_col = col_letters['Spouse First Name']
-                # Formula: =SpouseFirstName
-                formula = f'={sfn_col}{r_idx}'
+                # Formula: =IF(SpouseFirstName<>"",SpouseFirstName,"")
+                formula = f'=IF({sfn_col}{r_idx}<>"",{sfn_col}{r_idx},"")'
                 ws_main.cell(row=r_idx, column=c_idx, value=formula)
             
             else:
@@ -158,7 +247,11 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
                 if pd.isna(value):
                     ws_main.cell(row=r_idx, column=c_idx, value='')
                 else:
-                    ws_main.cell(row=r_idx, column=c_idx, value=value)
+                    cell_obj = ws_main.cell(row=r_idx, column=c_idx, value=value)
+                    
+                    # Format Cell column as text to prevent numeric interpretation
+                    if header == 'Cell':
+                        cell_obj.number_format = '@'  # Text format
     
     # Auto-adjust column widths
     for col in ws_main.columns:
@@ -305,6 +398,7 @@ if check_password():
     
     # Check for GitHub repo configuration
     github_repo = st.secrets.get("github", {}).get("config_repo", "")
+    github_token = st.secrets.get("github", {}).get("access_token", "")
     
     if github_repo:
         # Load from GitHub
@@ -540,7 +634,8 @@ if check_password():
                         
                         # Save P2P config if there were any auto-updates during transformation
                         if transformer.p2p_config_updates:
-                            save_json_config(p2p_path, p2p_config)
+                            save_config_with_github_sync(p2p_path, p2p_config, github_repo, github_token, "P2P config")
+                            st.session_state.p2p_config = p2p_config  # Update session state
                             st.info(f"✅ Auto-matched {len(transformer.p2p_config_updates)} P2P solicitor(s) and updated config")
                         
                         st.session_state.processed_df = processed_df
@@ -740,7 +835,10 @@ if check_password():
                                         'EN Campaign Name': record.get('campaign_data_10', ''),
                                         'Solicitor': match['id']
                                     }
-                                    save_json_config(p2p_path, p2p_config)
+                                    save_config_with_github_sync(p2p_path, p2p_config, github_repo, github_token, "P2P config")
+                                    
+                                    # Update session state
+                                    st.session_state.p2p_config = p2p_config
                                     
                                     # NOTE: We no longer call mark_as_solicitor API
                                     # The config update alone is sufficient
@@ -759,7 +857,10 @@ if check_password():
                                         'EN Campaign Name': record.get('campaign_data_10', ''),
                                         'Solicitor': manual_id
                                     }
-                                    save_json_config(p2p_path, p2p_config)
+                                    save_config_with_github_sync(p2p_path, p2p_config, github_repo, github_token, "P2P config")
+                                    
+                                    # Update session state
+                                    st.session_state.p2p_config = p2p_config
                                     
                                     # NOTE: We no longer call mark_as_solicitor API
                                     # The config update alone is sufficient
@@ -797,7 +898,10 @@ Peer-to-Peer → Sites → Edit identified site (square and pencil) → Fundrais
                                     'EN Campaign Name': manual_campaign_name,
                                     'Solicitor': manual_id
                                 }
-                                save_json_config(p2p_path, p2p_config)
+                                save_config_with_github_sync(p2p_path, p2p_config, github_repo, github_token, "P2P config")
+                                
+                                # Update session state
+                                st.session_state.p2p_config = p2p_config
                                 
                                 # NOTE: We no longer call mark_as_solicitor API
                                 # The config update alone is sufficient
