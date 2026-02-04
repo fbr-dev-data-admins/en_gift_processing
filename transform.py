@@ -784,7 +784,7 @@ class GiftTransformer:
                     'row_number': row_number,
                     'campaign_number': campaign_number,
                     'campaign_type': campaign_type,
-                    'campaign_id': row.get('Campaign ID', ''),  # Region page (form name)
+                    'campaign_id': str(row.get('Campaign ID', '')),  # Region page (form name)
                     'page_id': data_15,  # EN Fundraising Page ID
                     'page_name': page_name,
                     'campaign_data_6': row.get('Campaign Data 6', ''),
