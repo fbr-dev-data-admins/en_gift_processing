@@ -307,8 +307,8 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
                 FormulaRule(formula=[f'${ki_letter}2="O"'], fill=orange_fill)
             )
         
-        if "Appeal ID" in col_letters:
-            col_letter = col_letters["Appeal ID"]
+        if "Fund ID" in col_letters:
+            col_letter = col_letters["Fund ID"]
             ws_main.conditional_formatting.add(
                 f'{col_letter}2:{col_letter}{len(df)+1}',
                 FormulaRule(formula=[f'${ki_letter}2="O"'], fill=orange_fill)
