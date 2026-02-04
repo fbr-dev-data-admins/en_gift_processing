@@ -683,7 +683,7 @@ if check_password():
                         st.error(f"Transformation error: {e}")
                         import traceback
                         st.code(traceback.format_exc())
-            '''
+            """
             # Debug section for Partner Name / Spouse parsing
             with st.expander("🔍 Debug: Partner Name / Spouse Data"):
                 cols = list(st.session_state.raw_df.columns)
@@ -741,7 +741,7 @@ if check_password():
                 else:
                     st.warning("⚠️ 'Raisers Edge Constituent ID' not found")
                     st.write(f"  Looking for alternatives in: {re_id_cols}")
-            '''
+            """
             # # DEBUG SECTION - Commented out for production
             # # Show input column names for debugging
             # with st.expander("📋 Input Data Column Names (click to debug missing fields)"):
