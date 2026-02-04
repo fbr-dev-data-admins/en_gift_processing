@@ -605,31 +605,25 @@ if check_password():
                     if len(non_empty) > 0:
                         st.write(f"**Non-empty values:** {len(non_empty)}")
                         
-                        # Check for digits (numbers) - this indicates spouse info
+                        # Check for digits - these go entirely to Spouse First Name
                         has_digit = non_empty[non_empty.astype(str).str.contains(r'\d', na=False, regex=True)]
-                        st.write(f"**Values containing digits (will be parsed as spouse):** {len(has_digit)}")
+                        no_digit = non_empty[~non_empty.astype(str).str.contains(r'\d', na=False, regex=True)]
+                        
+                        st.write(f"**Values WITH digits (→ entire value to Spouse First Name):** {len(has_digit)}")
+                        st.write(f"**Values WITHOUT digits (→ parsed normally):** {len(no_digit)}")
                         
                         if len(has_digit) > 0:
-                            st.write("**Sample Partner Name values with digits:**")
-                            for i, val in enumerate(has_digit.head(10)):
-                                st.write(f"  {i+1}. `{val}`")
-                                
-                            # Test the parsing function directly
-                            st.write("")
-                            st.write("**Testing spouse parsing on first row with digits:**")
-                            first_digit_idx = has_digit.index[0]
-                            test_row = st.session_state.raw_df.loc[first_digit_idx]
-                            pn_val = test_row.get('Partner Name', '')
-                            fn_val = test_row.get('First Name', '')
-                            ln_val = test_row.get('Last Name', '')
-                            st.write(f"  Partner Name: `{pn_val}`")
-                            st.write(f"  First Name: `{fn_val}`")
-                            st.write(f"  Last Name: `{ln_val}`")
-                        else:
-                            st.warning("⚠️ No Partner Name values contain digits - spouse parsing requires a number in the field!")
-                            st.write("**Sample Partner Name values (first 10):**")
-                            for i, val in enumerate(non_empty.head(10)):
-                                st.write(f"  {i+1}. `{val}`")
+                            st.write("**Sample Partner Names WITH digits:**")
+                            for i, val in enumerate(has_digit.head(5)):
+                                st.write(f"  {i+1}. `{val}` → Spouse First: `{val}`")
+                        
+                        if len(no_digit) > 0:
+                            st.write("**Sample Partner Names WITHOUT digits (parsed):**")
+                            for i, val in enumerate(no_digit.head(5)):
+                                parts = str(val).split()
+                                sf = parts[0] if parts else ''
+                                sl = ' '.join(parts[1:]) if len(parts) > 1 else '(uses primary Last Name)'
+                                st.write(f"  {i+1}. `{val}` → First: `{sf}`, Last: `{sl}`")
                     else:
                         st.warning("All Partner Name values are empty or null")
                 else:
