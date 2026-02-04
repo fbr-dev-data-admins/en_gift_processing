@@ -561,20 +561,20 @@ if check_password():
                         
                         # # DEBUG SECTION - Commented out for production
                         # # Show debug log for RE API calls (Gifts Last Month)
-                        # if transformer.debug_log:
-                        #     with st.expander("🔍 Debug Log - Recurring Gift Lookups"):
-                        #         st.write(f"Total recurring gift records processed: {len(transformer.debug_log)}")
-                        #         debug_df = pd.DataFrame(transformer.debug_log)
-                        #         st.dataframe(debug_df)
-                        #         
-                        #         # Show first row's all column names to help debug
-                        #         if 'Campaign Type' in df.columns:
-                        #             recurring_rows = df[df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])]
-                        #             if len(recurring_rows) > 0:
-                        #                 st.write("**First recurring row - all columns with values:**")
-                        #                 first_row = recurring_rows.iloc[0]
-                        #                 non_empty = {k: v for k, v in first_row.items() if pd.notna(v) and str(v).strip() != ''}
-                        #                 st.json(non_empty)
+                        if transformer.debug_log:
+                            with st.expander("🔍 Debug Log - Recurring Gift Lookups"):
+                                st.write(f"Total recurring gift records processed: {len(transformer.debug_log)}")
+                                debug_df = pd.DataFrame(transformer.debug_log)
+                                st.dataframe(debug_df)
+                                
+                                # Show first row's all column names to help debug
+                                if 'Campaign Type' in df.columns:
+                                    recurring_rows = df[df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])]
+                                    if len(recurring_rows) > 0:
+                                        st.write("**First recurring row - all columns with values:**")
+                                        first_row = recurring_rows.iloc[0]
+                                        non_empty = {k: v for k, v in first_row.items() if pd.notna(v) and str(v).strip() != ''}
+                                        st.json(non_empty)
                         
                     except Exception as e:
                         st.error(f"Transformation error: {e}")
