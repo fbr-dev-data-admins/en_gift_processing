@@ -57,14 +57,23 @@ class GiftTransformer:
     
     def _clean_id(self, val) -> str:
         """Clean an ID value - remove decimal places from floats, handle NaN"""
-        if val is None or pd.isna(val):
+        if val is None:
             return ''
+        # Handle pandas NA values
+        try:
+            if pd.isna(val):
+                return ''
+        except (ValueError, TypeError):
+            pass
+        
         val_str = str(val).strip()
-        if val_str == 'nan' or val_str == '':
+        if val_str.lower() == 'nan' or val_str == '':
             return ''
+        
         # Remove .0 decimal from float representation
         if val_str.endswith('.0'):
             val_str = val_str[:-2]
+        
         # Also handle cases like 202668.0 by trying to convert to int
         try:
             float_val = float(val_str)
@@ -72,6 +81,7 @@ class GiftTransformer:
                 return str(int(float_val))
         except (ValueError, TypeError):
             pass
+        
         return val_str
     
     def __init__(self):
@@ -226,18 +236,7 @@ class GiftTransformer:
         output_df['Org Name'] = self._safe_column(df, 'Company/Org Name', 
                                   fallback_col='Company Name')
         
-        # Constituent ID - try multiple column name variations
-        constituent_id_found = False
-        for col_name in ['Raisers Edge Constituent ID', 'RE Constituent ID', 'Raiser\'s Edge Constituent ID',
-                         'RE System Record ID', 'System Record ID', 'Constituent ID']:
-            if col_name in df.columns:
-                output_df['Constituent ID'] = df[col_name].fillna('').apply(self._clean_id)
-                constituent_id_found = True
-                break
-        if not constituent_id_found:
-            output_df['Constituent ID'] = ''
-        
-        # Name fields
+        output_df['Raisers Edge Constituent ID'] = self._safe_column(df, 'Constituent ID')
         output_df['First Name'] = self._safe_column(df, 'First Name')
         output_df['Nickname'] = ''  # Will be Excel formula =First Name
         output_df['Middle Name'] = self._safe_column(df, 'Middle Name')
@@ -810,7 +809,14 @@ class GiftTransformer:
         
         # EN Fundraising Page ID = Campaign Data 15 (clean to remove .0)
         data_15_raw = row.get('Campaign Data 15', '')
-        data_15 = self._clean_id(data_15_raw)
+        # Handle float values from pandas
+        if isinstance(data_15_raw, float):
+            if pd.isna(data_15_raw):
+                data_15 = ''
+            else:
+                data_15 = str(int(data_15_raw)) if data_15_raw == int(data_15_raw) else str(data_15_raw)
+        else:
+            data_15 = self._clean_id(data_15_raw)
         
         # EN Fundraising Page Name from mapping
         page_name = self.FUNDRAISING_PAGE_MAPPING.get(data_15, '')
@@ -862,7 +868,7 @@ class GiftTransformer:
         Parse spouse name from Partner Name field.
         
         Logic:
-        - IF Partner Name contains #, write exact to start parsing
+        - IF Partner Name has any value, parse as spouse info
         - Spouse First Name = TEXTBEFORE first " "
         - IF second part is single letter or letter+period, write to Spouse Middle Name
         - IF TEXTAFTER (middle name or " ") <>"" THEN Spouse Last Name = TEXTAFTER, ELSE Spouse Last Name = Last Name
@@ -895,17 +901,23 @@ class GiftTransformer:
         spouse_middle = ''
         spouse_last = ''
         
-        # Check if partner name contains # - this indicates spouse info
-        if not partner_name or '#' not in partner_name:
-            return (spouse_first, spouse_middle, spouse_last)
-        
-        # Remove the # and parse - the # indicates this IS spouse data
-        partner_name = partner_name.replace('#', '').strip()
-        
+        # If no partner name, return empty
         if not partner_name:
             return (spouse_first, spouse_middle, spouse_last)
         
-        parts = partner_name.split()
+        # Check if the partner name is just a number (like 123456789) - skip these
+        import re as regex
+        if regex.match(r'^\d+$', partner_name):
+            return (spouse_first, spouse_middle, spouse_last)
+        
+        # Remove any digits from the partner name before parsing
+        # The digits are just an indicator, not part of the actual name
+        partner_name_clean = regex.sub(r'\d+', '', partner_name).strip()
+        
+        if not partner_name_clean:
+            return (spouse_first, spouse_middle, spouse_last)
+        
+        parts = partner_name_clean.split()
         
         if len(parts) >= 1:
             # Spouse First Name = TEXTBEFORE first " "
