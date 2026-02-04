@@ -88,6 +88,7 @@ class GiftTransformer:
         self.exceptions = []
         self.p2p_pending = []
         self.debug_log = []  # For debugging RE API calls
+        self.p2p_config_updates = {}  # Track P2P config updates made during transform
     
     def transform(
         self,
@@ -106,6 +107,7 @@ class GiftTransformer:
         self.exceptions = []
         self.p2p_pending = []
         self.debug_log = []  # Reset debug log
+        self.p2p_config_updates = {}  # Reset P2P config updates
         
         # Create a copy to avoid modifying original
         df = df.copy()
@@ -237,6 +239,7 @@ class GiftTransformer:
                                   fallback_col='Company Name')
         
         # Constituent ID - try multiple column name variations
+        # NOTE: Must use Raisers Edge Constituent ID, NOT LO Contact ID
         constituent_id_found = False
         for col_name in ['Raisers Edge Constituent ID', 'RE Constituent ID', 'Raiser\'s Edge Constituent ID',
                          'RE System Record ID', 'System Record ID', 'Constituent ID']:
@@ -254,8 +257,9 @@ class GiftTransformer:
         output_df['Last Name'] = self._safe_column(df, 'Last Name')
         
         # Spouse name parsing from Partner Name
-        # First, let's log what column names are available for debugging
-        available_partner_cols = [c for c in df.columns if any(x in c.lower() for x in ['partner', 'spouse'])]
+        # # DEBUG SECTION - Commented out for production
+        # # First, let's log what column names are available for debugging
+        # available_partner_cols = [c for c in df.columns if any(x in c.lower() for x in ['partner', 'spouse'])]
         
         # Check if Partner Name column exists
         has_partner_name = 'Partner Name' in df.columns
@@ -471,6 +475,7 @@ class GiftTransformer:
                 system_record_id = cleaned
                 break
         
+        campaign_data_10 = str(row.get('Campaign Data 10', ''))  # EN Campaign Name
         campaign_data_11 = str(row.get('Campaign Data 11', ''))  # Email
         
         re_match = None
@@ -491,14 +496,25 @@ class GiftTransformer:
                     re_match = result
                     matched_on = 'Email (Campaign Data 11)'
         
-        # Add to pending list for user review
+        # If we found a match, update P2P config immediately
+        if re_match:
+            p2p_config[campaign_number] = {
+                'EN Campaign Name': campaign_data_10,
+                'Solicitor': re_match.get('id', '')
+            }
+            # Track this update so calling code can save the config
+            self.p2p_config_updates[campaign_number] = p2p_config[campaign_number]
+            # NOTE: P2P config will be saved by the calling code after transform completes
+            # We no longer call mark_as_solicitor API - just update the config
+        
+        # Add to pending list for user review (even if matched, so user can verify)
         self.p2p_pending.append({
             'row_number': row_number,
             'campaign_number': campaign_number,
             'campaign_type': 'PFTC',
             'campaign_data_6': row.get('Campaign Data 6', ''),
             'campaign_data_7': row.get('Campaign Data 7', ''),
-            'campaign_data_10': row.get('Campaign Data 10', ''),  # Name / EN Campaign Name
+            'campaign_data_10': campaign_data_10,  # Name / EN Campaign Name
             'campaign_data_11': campaign_data_11,  # Email
             'system_record_id': system_record_id,
             're_match': re_match
@@ -693,21 +709,23 @@ class GiftTransformer:
         # Debug: Show what row index looks like
         row_index_info = str(row.index.tolist()[:10]) if hasattr(row, 'index') else 'no index'
         
-        debug_entry = {
-            'EN Transaction ID': en_txn_id,
-            'Campaign Type': campaign_type,
-            'Campaign Date': campaign_date_str,
-            'Campaign Data 16': data_16_str,
-            'Parsed Campaign Date': str(campaign_date) if campaign_date else 'PARSE FAILED',
-            'Parsed Data 16': str(data_16_date) if data_16_date else 'PARSE FAILED',
-            'Is New Recurring': is_new_recurring,
-            'RE System Record ID': re_system_id if re_system_id else '(empty)',
-            'RE ID Column Found': re_id_col_found,
-            'Row Keys (sample)': row_index_info,
-            'RE API Called': False,
-            'RE API Response': None,
-            'Gifts Last Month Result': ''
-        }
+        # # DEBUG SECTION - Commented out for production
+        # # Debug logging for RE API calls
+        # debug_entry = {
+        #     'EN Transaction ID': en_txn_id,
+        #     'Campaign Type': campaign_type,
+        #     'Campaign Date': campaign_date_str,
+        #     'Campaign Data 16': data_16_str,
+        #     'Parsed Campaign Date': str(campaign_date) if campaign_date else 'PARSE FAILED',
+        #     'Parsed Data 16': str(data_16_date) if data_16_date else 'PARSE FAILED',
+        #     'Is New Recurring': is_new_recurring,
+        #     'RE System Record ID': re_system_id if re_system_id else '(empty)',
+        #     'RE ID Column Found': re_id_col_found,
+        #     'Row Keys (sample)': row_index_info,
+        #     'RE API Called': False,
+        #     'RE API Response': None,
+        #     'Gifts Last Month Result': ''
+        # }
         
         if is_new_recurring and campaign_date is not None:
             # New recurring gift - populate all monthly donor fields
@@ -718,7 +736,7 @@ class GiftTransformer:
             statement_type = 'Emailed'
             channel = 'Digital -- Recurring'
             gifts_last_month = ''
-            debug_entry['Gifts Last Month Result'] = '(New recurring - no lookup needed)'
+            # debug_entry['Gifts Last Month Result'] = '(New recurring - no lookup needed)'
         else:
             # Existing recurring gift - need to look up previous month's gifts
             status = ''
@@ -731,7 +749,7 @@ class GiftTransformer:
             
             # Try to call RE API if available and we have a RE System Record ID
             if re_api and re_api.is_authenticated() and re_system_id and re_system_id != 'nan' and campaign_date is not None:
-                debug_entry['RE API Called'] = True
+                # debug_entry['RE API Called'] = True
                 try:
                     # Calculate the day to look for in previous month
                     gift_day = campaign_date.day
@@ -755,9 +773,9 @@ class GiftTransformer:
                         days_to_check = list(set([min(gift_day, days_in_prev_month), 28, 29, 30, 31]))
                         days_to_check = [d for d in days_to_check if d <= days_in_prev_month]
                     
-                    debug_entry['Days to Check'] = days_to_check
-                    debug_entry['Previous Month/Year'] = f"{prev_month}/{prev_year}"
-                    debug_entry['Target Dates'] = [f"{prev_year}-{prev_month:02d}-{d:02d}" for d in days_to_check]
+                    # debug_entry['Days to Check'] = days_to_check
+                    # debug_entry['Previous Month/Year'] = f"{prev_month}/{prev_year}"
+                    # debug_entry['Target Dates'] = [f"{prev_year}-{prev_month:02d}-{d:02d}" for d in days_to_check]
                     
                     # Call RE API to get gifts
                     gifts_found, api_debug = re_api.get_constituent_gifts(
@@ -767,16 +785,16 @@ class GiftTransformer:
                         days=days_to_check
                     )
                     
-                    # Add API debug info
-                    debug_entry['API Endpoint'] = api_debug.get('endpoint', '')
-                    debug_entry['API Params'] = str(api_debug.get('params', {}))
-                    debug_entry['API Status'] = api_debug.get('response_status', '')
-                    debug_entry['API Gifts Count'] = api_debug.get('gifts_count', 0)
-                    debug_entry['API Filtered Count'] = api_debug.get('filtered_count', 'N/A')
-                    if api_debug.get('error'):
-                        debug_entry['API Error'] = api_debug.get('error')
+                    # # Add API debug info
+                    # debug_entry['API Endpoint'] = api_debug.get('endpoint', '')
+                    # debug_entry['API Params'] = str(api_debug.get('params', {}))
+                    # debug_entry['API Status'] = api_debug.get('response_status', '')
+                    # debug_entry['API Gifts Count'] = api_debug.get('gifts_count', 0)
+                    # debug_entry['API Filtered Count'] = api_debug.get('filtered_count', 'N/A')
+                    # if api_debug.get('error'):
+                    #     debug_entry['API Error'] = api_debug.get('error')
                     
-                    debug_entry['RE API Response'] = str(gifts_found) if gifts_found else 'Empty'
+                    # debug_entry['RE API Response'] = str(gifts_found) if gifts_found else 'Empty'
                     
                     if gifts_found and len(gifts_found) > 0:
                         # Format: "date - $amount" with line breaks
@@ -786,27 +804,27 @@ class GiftTransformer:
                             gift_amount = gift.get('amount', '')
                             gift_strings.append(f"{gift_date} - ${gift_amount}")
                         gifts_last_month = '\n'.join(gift_strings)
-                        debug_entry['Gifts Last Month Result'] = f"Found {len(gifts_found)} gifts"
+                        # debug_entry['Gifts Last Month Result'] = f"Found {len(gifts_found)} gifts"
                     else:
                         gifts_last_month = 'CHECK'
-                        debug_entry['Gifts Last Month Result'] = 'No gifts found - CHECK'
+                        # debug_entry['Gifts Last Month Result'] = 'No gifts found - CHECK'
                         
                 except Exception as e:
-                    debug_entry['RE API Response'] = f"ERROR: {str(e)}"
-                    debug_entry['Gifts Last Month Result'] = f'API Error - CHECK'
+                    # debug_entry['RE API Response'] = f"ERROR: {str(e)}"
+                    # debug_entry['Gifts Last Month Result'] = f'API Error - CHECK'
                     gifts_last_month = 'CHECK'
-            else:
-                # Log why we didn't call the API
-                if not re_api:
-                    debug_entry['Gifts Last Month Result'] = 'No RE API configured - CHECK'
-                elif not re_api.is_authenticated():
-                    debug_entry['Gifts Last Month Result'] = 'RE API not authenticated - CHECK'
-                elif not re_system_id or re_system_id == 'nan':
-                    debug_entry['Gifts Last Month Result'] = 'No RE System Record ID - CHECK'
-                elif campaign_date is None:
-                    debug_entry['Gifts Last Month Result'] = 'Campaign Date parse failed - CHECK'
+            # else:
+            #     # Log why we didn't call the API
+            #     if not re_api:
+            #         debug_entry['Gifts Last Month Result'] = 'No RE API configured - CHECK'
+            #     elif not re_api.is_authenticated():
+            #         debug_entry['Gifts Last Month Result'] = 'RE API not authenticated - CHECK'
+            #     elif not re_system_id or re_system_id == 'nan':
+            #         debug_entry['Gifts Last Month Result'] = 'No RE System Record ID - CHECK'
+            #     elif campaign_date is None:
+            #         debug_entry['Gifts Last Month Result'] = 'Campaign Date parse failed - CHECK'
         
-        self.debug_log.append(debug_entry)
+        # self.debug_log.append(debug_entry)
         
         return (status, status_date, anniversary_desc, anniversary_date, 
                 statement_type, channel, payment_method, region, gifts_last_month)
