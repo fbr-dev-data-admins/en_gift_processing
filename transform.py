@@ -240,13 +240,29 @@ class GiftTransformer:
         
         # Constituent ID - try multiple column name variations
         # NOTE: Must use Raisers Edge Constituent ID, NOT LO Contact ID
+        # Explicitly check column names to avoid confusion with LO Contact ID
         constituent_id_found = False
-        for col_name in ['Raisers Edge Constituent ID', 'RE Constituent ID', 'Raiser\'s Edge Constituent ID',
-                         'RE System Record ID', 'System Record ID', 'Constituent ID']:
+        
+        # List of valid column names (excluding LO Contact ID)
+        valid_constituent_id_cols = [
+            'Raisers Edge Constituent ID', 
+            'RE Constituent ID', 
+            'Raiser\'s Edge Constituent ID',
+            'RE System Record ID', 
+            'System Record ID'
+        ]
+        
+        for col_name in valid_constituent_id_cols:
             if col_name in df.columns:
                 output_df['Constituent ID'] = df[col_name].fillna('').apply(self._clean_id)
                 constituent_id_found = True
                 break
+        
+        # Only use generic 'Constituent ID' if none of the specific ones found AND it's not 'LO Contact ID'
+        if not constituent_id_found and 'Constituent ID' in df.columns:
+            output_df['Constituent ID'] = df['Constituent ID'].fillna('').apply(self._clean_id)
+            constituent_id_found = True
+            
         if not constituent_id_found:
             output_df['Constituent ID'] = ''
         
@@ -333,18 +349,36 @@ class GiftTransformer:
                 break
         if cell_col:
             # Clean phone numbers: remove (+1), +1, or just 1 at start, clear if only +1
+            # Also handle numeric formatting (remove .0)
             def clean_phone(val):
                 if pd.isna(val):
                     return ''
-                val = str(val).strip()
+                
+                # Convert to string and handle numeric values
+                val_str = str(val).strip()
+                
+                # Remove .0 if present (from numeric formatting)
+                if val_str.endswith('.0'):
+                    val_str = val_str[:-2]
+                
                 # Remove common prefixes
-                val = val.replace('(+1)', '').replace('+1', '').strip()
+                val_str = val_str.replace('(+1)', '').replace('+1', '').strip()
+                
                 # If starts with just "1 " or "1-", remove it
-                if val.startswith('1 ') or val.startswith('1-'):
-                    val = val[2:].strip()
-                elif val == '1':
-                    val = ''
-                return val
+                if val_str.startswith('1 ') or val_str.startswith('1-'):
+                    val_str = val_str[2:].strip()
+                # If 11 digits starting with 1, remove the 1
+                elif val_str.startswith('1') and len(val_str.replace('-', '').replace(' ', '').replace('(', '').replace(')', '')) == 11:
+                    val_str = val_str[1:].strip()
+                elif val_str == '1':
+                    val_str = ''
+                
+                # Keep only digits, no decimal points
+                # Format as text (10 digits): ##########
+                digits_only = ''.join(c for c in val_str if c.isdigit())
+                
+                return digits_only
+            
             output_df['Cell'] = df[cell_col].apply(clean_phone)
         else:
             output_df['Cell'] = ''
