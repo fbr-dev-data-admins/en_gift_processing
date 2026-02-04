@@ -683,65 +683,65 @@ if check_password():
                         st.error(f"Transformation error: {e}")
                         import traceback
                         st.code(traceback.format_exc())
-            """
+            
             # Debug section for Partner Name / Spouse parsing
-            with st.expander("🔍 Debug: Partner Name / Spouse Data"):
-                cols = list(st.session_state.raw_df.columns)
-                partner_cols = [c for c in cols if 'partner' in c.lower() or 'spouse' in c.lower()]
-                st.write(f"**Columns containing 'partner' or 'spouse':** {partner_cols}")
+            # with st.expander("🔍 Debug: Partner Name / Spouse Data"):
+            #     cols = list(st.session_state.raw_df.columns)
+            #     partner_cols = [c for c in cols if 'partner' in c.lower() or 'spouse' in c.lower()]
+            #     st.write(f"**Columns containing 'partner' or 'spouse':** {partner_cols}")
                 
                 # Check for RE Constituent ID columns
-                re_id_cols = [c for c in cols if 'constituent' in c.lower() or 'raiser' in c.lower() or 'system record' in c.lower()]
-                st.write(f"**Columns containing RE ID info:** {re_id_cols}")
+            #     re_id_cols = [c for c in cols if 'constituent' in c.lower() or 'raiser' in c.lower() or 'system record' in c.lower()]
+            #     st.write(f"**Columns containing RE ID info:** {re_id_cols}")
                 
-                if 'Partner Name' in cols:
-                    st.write("✅ 'Partner Name' column found!")
-                    pn_series = st.session_state.raw_df['Partner Name']
+            #     if 'Partner Name' in cols:
+            #         st.write("✅ 'Partner Name' column found!")
+            #         pn_series = st.session_state.raw_df['Partner Name']
                     
                     # Count non-empty values
-                    non_empty_count = pn_series.notna().sum()
-                    st.write(f"**Total rows:** {len(pn_series)}")
-                    st.write(f"**Non-null values:** {non_empty_count}")
+            #         non_empty_count = pn_series.notna().sum()
+            #         st.write(f"**Total rows:** {len(pn_series)}")
+            #         st.write(f"**Non-null values:** {non_empty_count}")
                     
                     # Show non-empty samples
-                    non_empty = pn_series[pn_series.notna() & (pn_series.astype(str).str.strip() != '')]
-                    if len(non_empty) > 0:
-                        st.write(f"**Non-empty values:** {len(non_empty)}")
+            #         non_empty = pn_series[pn_series.notna() & (pn_series.astype(str).str.strip() != '')]
+            #         if len(non_empty) > 0:
+            #             st.write(f"**Non-empty values:** {len(non_empty)}")
                         
                         # Check for digits - these go entirely to Spouse First Name
-                        has_digit = non_empty[non_empty.astype(str).str.contains(r'\d', na=False, regex=True)]
-                        no_digit = non_empty[~non_empty.astype(str).str.contains(r'\d', na=False, regex=True)]
+            #             has_digit = non_empty[non_empty.astype(str).str.contains(r'\d', na=False, regex=True)]
+            #             no_digit = non_empty[~non_empty.astype(str).str.contains(r'\d', na=False, regex=True)]
                         
-                        st.write(f"**Values WITH digits (→ entire value to Spouse First Name):** {len(has_digit)}")
-                        st.write(f"**Values WITHOUT digits (→ parsed normally):** {len(no_digit)}")
+            #             st.write(f"**Values WITH digits (→ entire value to Spouse First Name):** {len(has_digit)}")
+            #             st.write(f"**Values WITHOUT digits (→ parsed normally):** {len(no_digit)}")
                         
-                        if len(has_digit) > 0:
-                            st.write("**Sample Partner Names WITH digits:**")
-                            for i, val in enumerate(has_digit.head(5)):
-                                st.write(f"  {i+1}. `{val}` → Spouse First: `{val}`")
+            #             if len(has_digit) > 0:
+            #                 st.write("**Sample Partner Names WITH digits:**")
+            #                 for i, val in enumerate(has_digit.head(5)):
+            #                     st.write(f"  {i+1}. `{val}` → Spouse First: `{val}`")
                         
-                        if len(no_digit) > 0:
-                            st.write("**Sample Partner Names WITHOUT digits (parsed):**")
-                            for i, val in enumerate(no_digit.head(5)):
-                                parts = str(val).split()
-                                sf = parts[0] if parts else ''
-                                sl = ' '.join(parts[1:]) if len(parts) > 1 else '(uses primary Last Name)'
-                                st.write(f"  {i+1}. `{val}` → First: `{sf}`, Last: `{sl}`")
-                    else:
-                        st.warning("All Partner Name values are empty or null")
-                else:
-                    st.error(f"❌ 'Partner Name' column NOT found!")
-                    st.write(f"**Available columns:** {cols[:30]}...")
+            #             if len(no_digit) > 0:
+            #                 st.write("**Sample Partner Names WITHOUT digits (parsed):**")
+            #                 for i, val in enumerate(no_digit.head(5)):
+            #                     parts = str(val).split()
+            #                     sf = parts[0] if parts else ''
+            #                     sl = ' '.join(parts[1:]) if len(parts) > 1 else '(uses primary Last Name)'
+            #                     st.write(f"  {i+1}. `{val}` → First: `{sf}`, Last: `{sl}`")
+            #         else:
+            #             st.warning("All Partner Name values are empty or null")
+            #     else:
+            #         st.error(f"❌ 'Partner Name' column NOT found!")
+            #         st.write(f"**Available columns:** {cols[:30]}...")
                 
                 # Show Constituent ID column
-                if 'Raisers Edge Constituent ID' in cols:
-                    st.write("✅ 'Raisers Edge Constituent ID' column found")
-                    sample = st.session_state.raw_df['Raisers Edge Constituent ID'].head(5)
-                    st.write(f"  Sample values: {list(sample)}")
-                else:
-                    st.warning("⚠️ 'Raisers Edge Constituent ID' not found")
-                    st.write(f"  Looking for alternatives in: {re_id_cols}")
-            """
+            #     if 'Raisers Edge Constituent ID' in cols:
+            #         st.write("✅ 'Raisers Edge Constituent ID' column found")
+            #         sample = st.session_state.raw_df['Raisers Edge Constituent ID'].head(5)
+            #         st.write(f"  Sample values: {list(sample)}")
+            #     else:
+            #         st.warning("⚠️ 'Raisers Edge Constituent ID' not found")
+            #         st.write(f"  Looking for alternatives in: {re_id_cols}")
+            
             # # DEBUG SECTION - Commented out for production
             # # Show input column names for debugging
             # with st.expander("📋 Input Data Column Names (click to debug missing fields)"):
