@@ -271,7 +271,7 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
     
     # Conditional formatting rules
     yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-    red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+    orange_fill = PatternFill(start_color="F2AC57", end_color="F2AC57", fill_type="solid")
     
     # Highlight Spouse First Name if contains number (simpler formula that works with openpyxl)
     if "Spouse First Name" in col_letters:
@@ -301,14 +301,14 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
             col_letter = col_letters["Constituent ID"]
             ws_main.conditional_formatting.add(
                 f'{col_letter}2:{col_letter}{len(df)+1}',
-                FormulaRule(formula=[f'AND(${ki_letter}2="O",{col_letter}2="")'], fill=red_fill)
+                FormulaRule(formula=[f'${ki_letter}2="O"'], fill=orange_fill)
             )
         
-        if "Fund ID" in col_letters:
-            col_letter = col_letters["Fund ID"]
+        if "Appeal ID" in col_letters:
+            col_letter = col_letters["Appeal ID"]
             ws_main.conditional_formatting.add(
                 f'{col_letter}2:{col_letter}{len(df)+1}',
-                FormulaRule(formula=[f'AND(${ki_letter}2="O",{col_letter}2="")'], fill=red_fill)
+                FormulaRule(formula=[f'${ki_letter}2="O"'], fill=orange_fill)
             )
     
     # Add exceptions sheet if there are exceptions
