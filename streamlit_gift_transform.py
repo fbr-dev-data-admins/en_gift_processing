@@ -538,6 +538,11 @@ if check_password():
                             re_api=st.session_state.re_api
                         )
                         
+                        # Save P2P config if there were any auto-updates during transformation
+                        if transformer.p2p_config_updates:
+                            save_json_config(p2p_path, p2p_config)
+                            st.info(f"✅ Auto-matched {len(transformer.p2p_config_updates)} P2P solicitor(s) and updated config")
+                        
                         st.session_state.processed_df = processed_df
                         st.session_state.exceptions_df = exceptions_df
                         st.session_state.p2p_pending = p2p_pending
@@ -737,9 +742,8 @@ if check_password():
                                     }
                                     save_json_config(p2p_path, p2p_config)
                                     
-                                    # Mark as solicitor in RE
-                                    if st.session_state.re_api and st.session_state.re_api.is_authenticated():
-                                        st.session_state.re_api.mark_as_solicitor(match['id'])
+                                    # NOTE: We no longer call mark_as_solicitor API
+                                    # The config update alone is sufficient
                                     
                                     st.session_state.p2p_pending.pop(i)
                                     st.success("Match saved!")
@@ -757,8 +761,8 @@ if check_password():
                                     }
                                     save_json_config(p2p_path, p2p_config)
                                     
-                                    if st.session_state.re_api and st.session_state.re_api.is_authenticated():
-                                        st.session_state.re_api.mark_as_solicitor(manual_id)
+                                    # NOTE: We no longer call mark_as_solicitor API
+                                    # The config update alone is sufficient
                                     
                                     st.session_state.p2p_pending.pop(i)
                                     st.success("Manual match saved!")
@@ -795,8 +799,8 @@ Peer-to-Peer → Sites → Edit identified site (square and pencil) → Fundrais
                                 }
                                 save_json_config(p2p_path, p2p_config)
                                 
-                                if st.session_state.re_api and st.session_state.re_api.is_authenticated():
-                                    st.session_state.re_api.mark_as_solicitor(manual_id)
+                                # NOTE: We no longer call mark_as_solicitor API
+                                # The config update alone is sufficient
                                 
                                 st.session_state.p2p_pending.pop(i)
                                 st.success("P2P match saved!")
