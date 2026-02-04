@@ -290,9 +290,12 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
         col_letter = col_letters["Gifts Last Month"]
         ws_main.conditional_formatting.add(
             f'{col_letter}2:{col_letter}{len(df)+1}',
-            CellIsRule(operator='equal', formula=['"CHECK"'], fill=yellow_fill)
+            FormulaRule(
+                formula=[f'ISNUMBER(SEARCH("CHECK",{col_letter}2))'],
+                fill=yellow_fill
+            )
         )
-    
+        
     # Highlight RE Constituent ID and Fund ID if Key Indicator = "O"
     if "Key Indicator" in col_letters:
         ki_letter = col_letters["Key Indicator"]
