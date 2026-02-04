@@ -581,6 +581,70 @@ if check_password():
                         import traceback
                         st.code(traceback.format_exc())
             
+            # Debug section for Partner Name / Spouse parsing
+            with st.expander("🔍 Debug: Partner Name / Spouse Data"):
+                cols = list(st.session_state.raw_df.columns)
+                partner_cols = [c for c in cols if 'partner' in c.lower() or 'spouse' in c.lower()]
+                st.write(f"**Columns containing 'partner' or 'spouse':** {partner_cols}")
+                
+                # Check for RE Constituent ID columns
+                re_id_cols = [c for c in cols if 'constituent' in c.lower() or 'raiser' in c.lower() or 'system record' in c.lower()]
+                st.write(f"**Columns containing RE ID info:** {re_id_cols}")
+                
+                if 'Partner Name' in cols:
+                    st.write("✅ 'Partner Name' column found!")
+                    pn_series = st.session_state.raw_df['Partner Name']
+                    
+                    # Count non-empty values
+                    non_empty_count = pn_series.notna().sum()
+                    st.write(f"**Total rows:** {len(pn_series)}")
+                    st.write(f"**Non-null values:** {non_empty_count}")
+                    
+                    # Show non-empty samples
+                    non_empty = pn_series[pn_series.notna() & (pn_series.astype(str).str.strip() != '')]
+                    if len(non_empty) > 0:
+                        st.write(f"**Non-empty values:** {len(non_empty)}")
+                        
+                        # Check for # character
+                        has_hash = non_empty[non_empty.astype(str).str.contains('#', na=False)]
+                        st.write(f"**Values containing '#':** {len(has_hash)}")
+                        
+                        if len(has_hash) > 0:
+                            st.write("**Sample Partner Name values with '#':**")
+                            for i, val in enumerate(has_hash.head(10)):
+                                st.write(f"  {i+1}. `{val}`")
+                                
+                            # Test the parsing function directly
+                            st.write("")
+                            st.write("**Testing spouse parsing on first row with '#':**")
+                            first_hash_idx = has_hash.index[0]
+                            test_row = st.session_state.raw_df.loc[first_hash_idx]
+                            pn_val = test_row.get('Partner Name', '')
+                            fn_val = test_row.get('First Name', '')
+                            ln_val = test_row.get('Last Name', '')
+                            st.write(f"  Partner Name: `{pn_val}`")
+                            st.write(f"  First Name: `{fn_val}`")
+                            st.write(f"  Last Name: `{ln_val}`")
+                        else:
+                            st.warning("⚠️ No Partner Name values contain '#' - spouse parsing requires '#' prefix!")
+                            st.write("**Sample Partner Name values (first 10):**")
+                            for i, val in enumerate(non_empty.head(10)):
+                                st.write(f"  {i+1}. `{val}`")
+                    else:
+                        st.warning("All Partner Name values are empty or null")
+                else:
+                    st.error(f"❌ 'Partner Name' column NOT found!")
+                    st.write(f"**Available columns:** {cols[:30]}...")
+                
+                # Show Constituent ID column
+                if 'Raisers Edge Constituent ID' in cols:
+                    st.write("✅ 'Raisers Edge Constituent ID' column found")
+                    sample = st.session_state.raw_df['Raisers Edge Constituent ID'].head(5)
+                    st.write(f"  Sample values: {list(sample)}")
+                else:
+                    st.warning("⚠️ 'Raisers Edge Constituent ID' not found")
+                    st.write(f"  Looking for alternatives in: {re_id_cols}")
+            
             # # DEBUG SECTION - Commented out for production
             # # Show input column names for debugging
             # with st.expander("📋 Input Data Column Names (click to debug missing fields)"):
