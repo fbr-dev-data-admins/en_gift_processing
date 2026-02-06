@@ -93,5 +93,9 @@
       "Solicitor IDs must be valid Raiser's Edge Constituent IDs",
       "This file is automatically updated when new P2P matches are made through the application"
     ]
+  },
+  "17025": {
+    "EN Campaign Name": "Jeff Evertz",
+    "Solicitor": "136926"
   }
 }
