@@ -594,7 +594,7 @@ if check_password():
                             st.subheader(f"Form: {form_name}")
                             col1, col2, col3 = st.columns(3)
                             with col1:
-                                appeal = st.text_input(f"Appeal for {form_name}", key=f"appeal_{form_name}")
+                                appeal = st.text_input(f"Appeal for {form_name} (without FY number)", key=f"appeal_{form_name}")
                             with col2:
                                 fund = st.text_input(f"Fund for {form_name}", key=f"fund_{form_name}")
                             with col3:
