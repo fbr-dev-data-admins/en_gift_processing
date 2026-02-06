@@ -515,7 +515,8 @@ if check_password():
                         st.error(f"Error fetching data: {e}")
                         st.info("💡 Make sure your EN API token is correct and has bulk export permissions.")
         
-        # Alternative: Upload CSV
+        # # ---------- FILE UPLOAD SECTION (COMMENTED OUT FOR PRODUCTION) ----------
+        # # Alternative: Upload CSV - uncomment for testing
         st.divider()
         st.subheader("Or Upload Existing CSV")
         uploaded_csv = st.file_uploader("Upload EN Export CSV", type=['csv'])
@@ -535,6 +536,7 @@ if check_password():
                 st.dataframe(df.head(20))
             except Exception as e:
                 st.error(f"Error loading CSV: {e}")
+        # # ---------- END FILE UPLOAD SECTION ----------
     
     # ---------- TAB 2: TRANSFORM ----------
     with tab2:
@@ -594,25 +596,43 @@ if check_password():
                             st.subheader(f"Form: {form_name}")
                             col1, col2, col3 = st.columns(3)
                             with col1:
-                                appeal = st.text_input(f"Appeal for {form_name} (without FY number)", key=f"appeal_{form_name}")
+                                appeal = st.text_input(f"Appeal for {form_name} (do not include FY number)", key=f"appeal_{form_name}")
                             with col2:
                                 fund = st.text_input(f"Fund for {form_name}", key=f"fund_{form_name}")
                             with col3:
                                 is_match = st.checkbox(f"MATCH package?", key=f"match_{form_name}")
                             
                             if st.button(f"Save {form_name}", key=f"save_{form_name}"):
+                                # Initialize forms dict if not exists
                                 if 'forms' not in mapping_config:
                                     mapping_config['forms'] = {}
+                                
+                                # Add form mapping
                                 mapping_config['forms'][form_name] = {
                                     'appeal': appeal,
                                     'fund': fund
                                 }
+                                
+                                # Add to MATCH list if checked
                                 if is_match:
                                     if 'MATCH' not in mapping_config:
                                         mapping_config['MATCH'] = []
-                                    mapping_config['MATCH'].append(form_name)
-                                save_json_config(mapping_path, mapping_config)
-                                st.success(f"Saved mapping for {form_name}")
+                                    if form_name not in mapping_config['MATCH']:
+                                        mapping_config['MATCH'].append(form_name)
+                                
+                                # Save with GitHub sync (same pattern as P2P config)
+                                save_config_with_github_sync(
+                                    mapping_path, 
+                                    mapping_config, 
+                                    github_repo, 
+                                    github_token, 
+                                    "mapping config"
+                                )
+                                
+                                # Update session state
+                                st.session_state.mapping_config = mapping_config
+                                
+                                st.success(f"✅ Saved mapping for {form_name}" + (" (with MATCH)" if is_match else ""))
                                 st.rerun()
             
             if st.button("🔄 Run Transformation", type="primary"):
@@ -684,42 +704,43 @@ if check_password():
                         import traceback
                         st.code(traceback.format_exc())
             
-            # Debug section for Partner Name / Spouse parsing
+            # # DEBUG SECTION - Commented out for production
+            # # Debug section for Partner Name / Spouse parsing
             # with st.expander("🔍 Debug: Partner Name / Spouse Data"):
             #     cols = list(st.session_state.raw_df.columns)
             #     partner_cols = [c for c in cols if 'partner' in c.lower() or 'spouse' in c.lower()]
             #     st.write(f"**Columns containing 'partner' or 'spouse':** {partner_cols}")
-                
-                # Check for RE Constituent ID columns
+            #     
+            #     # Check for RE Constituent ID columns
             #     re_id_cols = [c for c in cols if 'constituent' in c.lower() or 'raiser' in c.lower() or 'system record' in c.lower()]
             #     st.write(f"**Columns containing RE ID info:** {re_id_cols}")
-                
+            #     
             #     if 'Partner Name' in cols:
             #         st.write("✅ 'Partner Name' column found!")
             #         pn_series = st.session_state.raw_df['Partner Name']
-                    
-                    # Count non-empty values
+            #         
+            #         # Count non-empty values
             #         non_empty_count = pn_series.notna().sum()
             #         st.write(f"**Total rows:** {len(pn_series)}")
             #         st.write(f"**Non-null values:** {non_empty_count}")
-                    
-                    # Show non-empty samples
+            #         
+            #         # Show non-empty samples
             #         non_empty = pn_series[pn_series.notna() & (pn_series.astype(str).str.strip() != '')]
             #         if len(non_empty) > 0:
             #             st.write(f"**Non-empty values:** {len(non_empty)}")
-                        
-                        # Check for digits - these go entirely to Spouse First Name
+            #             
+            #             # Check for digits - these go entirely to Spouse First Name
             #             has_digit = non_empty[non_empty.astype(str).str.contains(r'\d', na=False, regex=True)]
             #             no_digit = non_empty[~non_empty.astype(str).str.contains(r'\d', na=False, regex=True)]
-                        
+            #             
             #             st.write(f"**Values WITH digits (→ entire value to Spouse First Name):** {len(has_digit)}")
             #             st.write(f"**Values WITHOUT digits (→ parsed normally):** {len(no_digit)}")
-                        
+            #             
             #             if len(has_digit) > 0:
             #                 st.write("**Sample Partner Names WITH digits:**")
             #                 for i, val in enumerate(has_digit.head(5)):
             #                     st.write(f"  {i+1}. `{val}` → Spouse First: `{val}`")
-                        
+            #             
             #             if len(no_digit) > 0:
             #                 st.write("**Sample Partner Names WITHOUT digits (parsed):**")
             #                 for i, val in enumerate(no_digit.head(5)):
@@ -732,8 +753,8 @@ if check_password():
             #     else:
             #         st.error(f"❌ 'Partner Name' column NOT found!")
             #         st.write(f"**Available columns:** {cols[:30]}...")
-                
-                # Show Constituent ID column
+            #     
+            #     # Show Constituent ID column
             #     if 'Raisers Edge Constituent ID' in cols:
             #         st.write("✅ 'Raisers Edge Constituent ID' column found")
             #         sample = st.session_state.raw_df['Raisers Edge Constituent ID'].head(5)
@@ -741,36 +762,6 @@ if check_password():
             #     else:
             #         st.warning("⚠️ 'Raisers Edge Constituent ID' not found")
             #         st.write(f"  Looking for alternatives in: {re_id_cols}")
-            
-            # # DEBUG SECTION - Commented out for production
-            # # Show input column names for debugging
-            # with st.expander("📋 Input Data Column Names (click to debug missing fields)"):
-            #     st.write("**Available columns in input data:**")
-            #     cols = list(st.session_state.raw_df.columns)
-            #     st.write(cols)
-            #     
-            #     # Show columns that might be RE ID
-            #     st.write("")
-            #     st.write("**Columns that might contain RE ID:**")
-            #     re_id_candidates = [c for c in cols if any(x in c.lower() for x in ['re', 'raiser', 'constituent', 'system', 'record'])]
-            #     if re_id_candidates:
-            #         st.write(re_id_candidates)
-            #         # Show sample values from these columns
-            #         st.write("**Sample values from potential RE ID columns (first 5 rows):**")
-            #         sample_df = st.session_state.raw_df[re_id_candidates].head()
-            #         st.dataframe(sample_df)
-            #     else:
-            #         st.warning("No columns found matching common RE ID patterns")
-            #     
-            #     # Show columns that might be ZIP, Email, Phone
-            #     st.write("")
-            #     st.write("**Columns that might contain ZIP/Email/Phone:**")
-            #     contact_candidates = [c for c in cols if any(x in c.lower() for x in ['zip', 'postal', 'email', 'phone', 'mobile', 'cell'])]
-            #     if contact_candidates:
-            #         st.write(contact_candidates)
-            #         st.write("**Sample values (first 5 rows):**")
-            #         sample_df = st.session_state.raw_df[contact_candidates].head()
-            #         st.dataframe(sample_df)
             
             # Export section
             st.divider()
