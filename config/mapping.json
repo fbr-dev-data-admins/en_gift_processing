@@ -360,16 +360,11 @@
     "D.3.1 9Cares Internal Use Donation Form": {
       "appeal": "9CARES",
       "fund": "Promo-U"
-    },
-    "NEW PAGE NAME": {
-      "appeal": "WEB",
-      "fund": "Ind-U"
     }
   },
   "MATCH": [
     "Example Form Name",
-    "Example Form Name 2",
-    "NEW PAGE NAME"
+    "Example Form Name 2"
   ],
   "_comments": {
     "fiscal_year_designation": "This value is prepended to all appeal IDs EXCEPT those starting with 'CCDEN'",
