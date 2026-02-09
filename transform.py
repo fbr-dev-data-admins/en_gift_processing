@@ -38,8 +38,8 @@ class GiftTransformer:
         'Spouse Nickname', 'Spouse Middle Name', 'Spouse Last Name', 'Address', 'City', 'State', 'ZIP',
         'Country', 'E-mail', 'Cell', 'EN Transaction ID', 'Gift Date', 'GL Post Date',
         'Gift Amount', 'Donation Type', 'Gifts Last Month', 'EN Donation Form Name', 'Branch',
-        'Gift Reference', 'Campaign', 'Appeal ID', 'Package', 'Gift Subtype', 'Addressee',
-        'Spouse Addressee', 'Salutation', 'Spouse Salutation', 'Monthly Donor Status Description',
+        'Gift Reference', 'Campaign', 'Department', 'Appeal ID', 'Package', 'Gift Subtype', 'Pay Method',
+        'Addressee', 'Spouse Addressee', 'Salutation', 'Spouse Salutation', 'Monthly Donor Status Description',
         'Monthly Donor Status Date', 'Monthly Donor Anniversary Description', 'Monthly Donor Anniversary Date',
         'Monthly Donor Annual Statement Type', 'Monthly Donor Channel', 'Monthly Donor Payment Method',
         'Monthly Donor Region', 'EN Campaign ID', 'EN Campaign Name', 'Solicitor',
@@ -195,6 +195,41 @@ class GiftTransformer:
         
         # Gift Subtype: Based on Campaign Data 12 and Campaign ID
         output_df['Gift Subtype'] = df.apply(self._get_gift_subtype, axis=1)
+        
+        # Department: Based on Campaign value
+        # CCDEN → "93 - Denver Capital Campaign", FY## → "15 - General Operating"
+        def get_department(campaign_val):
+            if pd.isna(campaign_val) or str(campaign_val).strip() == '':
+                return ''
+            campaign_str = str(campaign_val).strip()
+            if campaign_str == 'CCDEN':
+                return '93 - Denver Capital Campaign'
+            elif campaign_str.startswith('FY'):
+                return '15 - General Operating'
+            return ''
+        
+        output_df['Department'] = output_df['Campaign'].apply(get_department)
+        
+        # Pay Method: Based on Campaign Type
+        # FCS, FCR, PFCS, PFCR → "Credit Card"
+        # FBS, FBR, PFBS, PFBR → "Other"
+        CREDIT_CARD_TYPES = ['FCS', 'FCR', 'PFCS', 'PFCR']
+        OTHER_TYPES = ['FBS', 'FBR', 'PFBS', 'PFBR']
+        
+        def get_pay_method(campaign_type_val):
+            if pd.isna(campaign_type_val) or str(campaign_type_val).strip() == '':
+                return ''
+            ct = str(campaign_type_val).strip()
+            if ct in CREDIT_CARD_TYPES:
+                return 'Credit Card'
+            elif ct in OTHER_TYPES:
+                return 'Other'
+            return ''
+        
+        if 'Campaign Type' in df.columns:
+            output_df['Pay Method'] = df['Campaign Type'].apply(get_pay_method)
+        else:
+            output_df['Pay Method'] = ''
         
         # Donation Type: "Recurring" for recurring campaign types
         output_df['Donation Type'] = df['Campaign Type'].apply(
