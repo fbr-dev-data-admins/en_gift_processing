@@ -460,11 +460,8 @@ class GiftTransformer:
         else:
             output_df['Requests no email?'] = ''
         
-        # Key Indicator: "I" for individual, "O" for organization
+        # Key Indicator: Always "I" for individual (manual review needed for organizations)
         output_df['Key Indicator'] = 'I'
-        # Mark as "O" if Org Name has a value
-        org_mask = output_df['Org Name'].notna() & (output_df['Org Name'] != '')
-        output_df.loc[org_mask, 'Key Indicator'] = 'O'
         
         # For QCB records, clear all non-biographical columns
         qcb_indices = set()
