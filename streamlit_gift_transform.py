@@ -517,25 +517,25 @@ if check_password():
         
         # # ---------- FILE UPLOAD SECTION (COMMENTED OUT FOR PRODUCTION) ----------
         # # Alternative: Upload CSV - uncomment for testing
-        st.divider()
-        st.subheader("Or Upload Existing CSV")
-        uploaded_csv = st.file_uploader("Upload EN Export CSV", type=['csv'])
-        if uploaded_csv:
-            try:
-                # Try multiple encodings
-                for encoding in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']:
-                    try:
-                        uploaded_csv.seek(0)
-                        df = pd.read_csv(uploaded_csv, encoding=encoding)
-                        break
-                    except UnicodeDecodeError:
-                        continue
-                
-                st.session_state.raw_df = df
-                st.success(f"✅ Loaded {len(df)} records from CSV")
-                st.dataframe(df.head(20))
-            except Exception as e:
-                st.error(f"Error loading CSV: {e}")
+        # st.divider()
+        # st.subheader("Or Upload Existing CSV")
+        # uploaded_csv = st.file_uploader("Upload EN Export CSV", type=['csv'])
+        # if uploaded_csv:
+        #     try:
+        #         # Try multiple encodings
+        #         for encoding in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']:
+        #             try:
+        #                 uploaded_csv.seek(0)
+        #                 df = pd.read_csv(uploaded_csv, encoding=encoding)
+        #                 break
+        #             except UnicodeDecodeError:
+        #                 continue
+        #         
+        #         st.session_state.raw_df = df
+        #         st.success(f"✅ Loaded {len(df)} records from CSV")
+        #         st.dataframe(df.head(20))
+        #     except Exception as e:
+        #         st.error(f"Error loading CSV: {e}")
         # # ---------- END FILE UPLOAD SECTION ----------
     
     # ---------- TAB 2: TRANSFORM ----------
@@ -682,86 +682,10 @@ if check_password():
                             with st.expander("View Exceptions"):
                                 st.dataframe(exceptions_df)
                         
-                        # # DEBUG SECTION - Commented out for production
-                        # # Show debug log for RE API calls (Gifts Last Month)
-                        # if transformer.debug_log:
-                        #     with st.expander("🔍 Debug Log - Recurring Gift Lookups"):
-                        #         st.write(f"Total recurring gift records processed: {len(transformer.debug_log)}")
-                        #         debug_df = pd.DataFrame(transformer.debug_log)
-                        #         st.dataframe(debug_df)
-                        #         
-                        #         # Show first row's all column names to help debug
-                        #         if 'Campaign Type' in df.columns:
-                        #             recurring_rows = df[df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])]
-                        #             if len(recurring_rows) > 0:
-                        #                 st.write("**First recurring row - all columns with values:**")
-                        #                 first_row = recurring_rows.iloc[0]
-                        #                 non_empty = {k: v for k, v in first_row.items() if pd.notna(v) and str(v).strip() != ''}
-                        #                 st.json(non_empty)
-                        
                     except Exception as e:
                         st.error(f"Transformation error: {e}")
                         import traceback
                         st.code(traceback.format_exc())
-            
-            # # DEBUG SECTION - Commented out for production
-            # # Debug section for Partner Name / Spouse parsing
-            # with st.expander("🔍 Debug: Partner Name / Spouse Data"):
-            #     cols = list(st.session_state.raw_df.columns)
-            #     partner_cols = [c for c in cols if 'partner' in c.lower() or 'spouse' in c.lower()]
-            #     st.write(f"**Columns containing 'partner' or 'spouse':** {partner_cols}")
-            #     
-            #     # Check for RE Constituent ID columns
-            #     re_id_cols = [c for c in cols if 'constituent' in c.lower() or 'raiser' in c.lower() or 'system record' in c.lower()]
-            #     st.write(f"**Columns containing RE ID info:** {re_id_cols}")
-            #     
-            #     if 'Partner Name' in cols:
-            #         st.write("✅ 'Partner Name' column found!")
-            #         pn_series = st.session_state.raw_df['Partner Name']
-            #         
-            #         # Count non-empty values
-            #         non_empty_count = pn_series.notna().sum()
-            #         st.write(f"**Total rows:** {len(pn_series)}")
-            #         st.write(f"**Non-null values:** {non_empty_count}")
-            #         
-            #         # Show non-empty samples
-            #         non_empty = pn_series[pn_series.notna() & (pn_series.astype(str).str.strip() != '')]
-            #         if len(non_empty) > 0:
-            #             st.write(f"**Non-empty values:** {len(non_empty)}")
-            #             
-            #             # Check for digits - these go entirely to Spouse First Name
-            #             has_digit = non_empty[non_empty.astype(str).str.contains(r'\d', na=False, regex=True)]
-            #             no_digit = non_empty[~non_empty.astype(str).str.contains(r'\d', na=False, regex=True)]
-            #             
-            #             st.write(f"**Values WITH digits (→ entire value to Spouse First Name):** {len(has_digit)}")
-            #             st.write(f"**Values WITHOUT digits (→ parsed normally):** {len(no_digit)}")
-            #             
-            #             if len(has_digit) > 0:
-            #                 st.write("**Sample Partner Names WITH digits:**")
-            #                 for i, val in enumerate(has_digit.head(5)):
-            #                     st.write(f"  {i+1}. `{val}` → Spouse First: `{val}`")
-            #             
-            #             if len(no_digit) > 0:
-            #                 st.write("**Sample Partner Names WITHOUT digits (parsed):**")
-            #                 for i, val in enumerate(no_digit.head(5)):
-            #                     parts = str(val).split()
-            #                     sf = parts[0] if parts else ''
-            #                     sl = ' '.join(parts[1:]) if len(parts) > 1 else '(uses primary Last Name)'
-            #                     st.write(f"  {i+1}. `{val}` → First: `{sf}`, Last: `{sl}`")
-            #         else:
-            #             st.warning("All Partner Name values are empty or null")
-            #     else:
-            #         st.error(f"❌ 'Partner Name' column NOT found!")
-            #         st.write(f"**Available columns:** {cols[:30]}...")
-            #     
-            #     # Show Constituent ID column
-            #     if 'Raisers Edge Constituent ID' in cols:
-            #         st.write("✅ 'Raisers Edge Constituent ID' column found")
-            #         sample = st.session_state.raw_df['Raisers Edge Constituent ID'].head(5)
-            #         st.write(f"  Sample values: {list(sample)}")
-            #     else:
-            #         st.warning("⚠️ 'Raisers Edge Constituent ID' not found")
-            #         st.write(f"  Looking for alternatives in: {re_id_cols}")
             
             # Export section
             st.divider()
@@ -772,7 +696,7 @@ if check_password():
                 if st.session_state.p2p_pending and len(st.session_state.p2p_pending) > 0:
                     st.error(f"⛔ **Cannot generate working file:** {len(st.session_state.p2p_pending)} P2P records need matching first. Please complete P2P matching in Tab 3 before exporting.")
                 else:
-                    st.warning("⚠️ **Important:** Download the working file below, then use VBA macro stored at {file path} to complete final processing before RE import.")
+                    st.warning("⚠️ **Important:** Download the working file below, then use VBA macro stored at L:\\Development Systems\\Database\\Engaging Networks\\Custom EN Transactions into RE\\{Version #.#} Import Preparation.xlsm to complete final processing before RE import.")
                     
                     if st.button("📊 Generate Working Excel", type="primary"):
                         excel_buffer = create_excel_output(
@@ -799,6 +723,7 @@ if check_password():
             
             for i, record in enumerate(st.session_state.p2p_pending):
                 campaign_type = record.get('campaign_type', '')
+                campaign_num = record.get('campaign_number', '')  # Use for unique keys
                 
                 # Different display for PFTC vs other P2P types
                 if campaign_type == 'PFTC':
@@ -809,7 +734,7 @@ if check_password():
                         with col1:
                             st.subheader("EN Data")
                             st.write(f"**Row Number:** {record.get('row_number', '')}")
-                            st.write(f"**Campaign Number:** {record.get('campaign_number', '')}")
+                            st.write(f"**Campaign Number:** {campaign_num}")
                             st.write(f"**Campaign Data 6:** {record.get('campaign_data_6', '')}")
                             st.write(f"**Campaign Data 7:** {record.get('campaign_data_7', '')}")
                             st.write(f"**Campaign Data 10 (Name):** {record.get('campaign_data_10', '')}")
@@ -823,9 +748,9 @@ if check_password():
                                 st.write(f"**Name:** {match.get('name', '')}")
                                 st.write(f"**Matched on:** {match.get('matched_on', '')}")
                                 
-                                if st.button(f"✅ Accept Match", key=f"accept_{i}"):
+                                if st.button(f"✅ Accept Match", key=f"accept_{campaign_num}"):
                                     # Save to P2P.json - EN Campaign Name auto-populates from campaign_data_10
-                                    p2p_config[record['campaign_number']] = {
+                                    p2p_config[campaign_num] = {
                                         'EN Campaign Name': record.get('campaign_data_10', ''),
                                         'Solicitor': match['id']
                                     }
@@ -834,9 +759,6 @@ if check_password():
                                     # Update session state
                                     st.session_state.p2p_config = p2p_config
                                     
-                                    # NOTE: We no longer call mark_as_solicitor API
-                                    # The config update alone is sufficient
-                                    
                                     st.session_state.p2p_pending.pop(i)
                                     st.success("Match saved!")
                                     st.rerun()
@@ -844,10 +766,10 @@ if check_password():
                                 st.warning("No automatic match found")
                             
                             # Manual entry - only RE Constituent ID for PFTC (EN Campaign Name auto-populates)
-                            manual_id = st.text_input(f"Enter RE Constituent ID manually:", key=f"manual_{i}")
-                            if st.button(f"💾 Save Manual Match", key=f"save_manual_{i}"):
+                            manual_id = st.text_input(f"Enter RE Constituent ID manually:", key=f"manual_id_{campaign_num}")
+                            if st.button(f"💾 Save Manual Match", key=f"save_manual_{campaign_num}"):
                                 if manual_id:
-                                    p2p_config[record['campaign_number']] = {
+                                    p2p_config[campaign_num] = {
                                         'EN Campaign Name': record.get('campaign_data_10', ''),
                                         'Solicitor': manual_id
                                     }
@@ -856,18 +778,15 @@ if check_password():
                                     # Update session state
                                     st.session_state.p2p_config = p2p_config
                                     
-                                    # NOTE: We no longer call mark_as_solicitor API
-                                    # The config update alone is sufficient
-                                    
                                     st.session_state.p2p_pending.pop(i)
                                     st.success("Manual match saved!")
                                     st.rerun()
                 else:
                     # PFCS, PFCR, PFBS, PFBR: Show campaign number, region page, and message
-                    with st.expander(f"{campaign_type} Record - Row {record.get('row_number', 'N/A')}: Campaign {record.get('campaign_number', '')}"):
+                    with st.expander(f"{campaign_type} Record - Row {record.get('row_number', 'N/A')}: Campaign {campaign_num}"):
                         st.subheader("P2P Gift Details")
                         st.write(f"**Row Number:** {record.get('row_number', '')}")
-                        st.write(f"**Campaign Number:** {record.get('campaign_number', '')}")
+                        st.write(f"**Campaign Number:** {campaign_num}")
                         st.write(f"**Campaign Type:** {campaign_type}")
                         st.write(f"**Region Page:** {record.get('campaign_id', '')}")
                         
@@ -883,12 +802,12 @@ Peer-to-Peer → Sites → Edit identified site (square and pencil) → Fundrais
                         
                         # Manual entry - both RE Constituent ID AND EN Campaign Name for non-PFTC
                         st.subheader("Manual Entry Required")
-                        manual_campaign_name = st.text_input(f"EN Campaign Name:", key=f"campaign_name_{i}")
-                        manual_id = st.text_input(f"RE Constituent ID (Solicitor):", key=f"manual_{i}")
+                        manual_campaign_name = st.text_input(f"EN Campaign Name:", key=f"campaign_name_{campaign_num}")
+                        manual_id = st.text_input(f"RE Constituent ID (Solicitor):", key=f"manual_id_{campaign_num}")
                         
-                        if st.button(f"💾 Save P2P Match", key=f"save_manual_{i}"):
+                        if st.button(f"💾 Save P2P Match", key=f"save_manual_{campaign_num}"):
                             if manual_id and manual_campaign_name:
-                                p2p_config[record['campaign_number']] = {
+                                p2p_config[campaign_num] = {
                                     'EN Campaign Name': manual_campaign_name,
                                     'Solicitor': manual_id
                                 }
@@ -896,9 +815,6 @@ Peer-to-Peer → Sites → Edit identified site (square and pencil) → Fundrais
                                 
                                 # Update session state
                                 st.session_state.p2p_config = p2p_config
-                                
-                                # NOTE: We no longer call mark_as_solicitor API
-                                # The config update alone is sufficient
                                 
                                 st.session_state.p2p_pending.pop(i)
                                 st.success("P2P match saved!")
