@@ -314,6 +314,33 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
                 FormulaRule(formula=[f'${ki_letter}2="O"'], fill=orange_fill)
             )
     
+    # Highlight blank Country when any address field has data
+    if "Country" in col_letters:
+        country_col = col_letters["Country"]
+        addr_col = col_letters.get("Address", "")
+        city_col = col_letters.get("City", "")
+        state_col = col_letters.get("State", "")
+        zip_col = col_letters.get("ZIP", "")
+        
+        # Build formula: Country is blank AND (Address<>"" OR City<>"" OR State<>"" OR ZIP<>"")
+        conditions = []
+        if addr_col:
+            conditions.append(f'{addr_col}2<>""')
+        if city_col:
+            conditions.append(f'{city_col}2<>""')
+        if state_col:
+            conditions.append(f'{state_col}2<>""')
+        if zip_col:
+            conditions.append(f'{zip_col}2<>""')
+        
+        if conditions:
+            or_formula = ",".join(conditions)
+            formula = f'AND({country_col}2="",OR({or_formula}))'
+            ws_main.conditional_formatting.add(
+                f'{country_col}2:{country_col}{len(df)+1}',
+                FormulaRule(formula=[formula], fill=yellow_fill)
+            )
+    
     # Add exceptions sheet if there are exceptions
     if exceptions_df is not None and len(exceptions_df) > 0:
         ws_exceptions = wb.create_sheet("Exceptions")
