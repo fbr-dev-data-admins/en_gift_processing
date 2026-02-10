@@ -708,169 +708,28 @@ if check_password():
                         if exceptions_df is not None and len(exceptions_df) > 0:
                             with st.expander("View Exceptions"):
                                 st.dataframe(exceptions_df)
-                        
+                                
+                        # DEBUG SECTION - Commented out for production
+                        # Show debug log for RE API calls (Gifts Last Month)
+                        if transformer.debug_log:
+                            with st.expander("🔍 Debug Log - Recurring Gift Lookups"):
+                                st.write(f"Total recurring gift records processed: {len(transformer.debug_log)}")
+                                debug_df = pd.DataFrame(transformer.debug_log)
+                                st.dataframe(debug_df)
+                                
+                                # Show first row's all column names to help debug
+                                if 'Campaign Type' in df.columns:
+                                    recurring_rows = df[df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])]
+                                    if len(recurring_rows) > 0:
+                                        st.write("**First recurring row - all columns with values:**")
+                                        first_row = recurring_rows.iloc[0]
+                                        non_empty = {k: v for k, v in first_row.items() if pd.notna(v) and str(v).strip() != ''}
+                                        st.json(non_empty)
+                    
                     except Exception as e:
                         st.error(f"Transformation error: {e}")
                         import traceback
                         st.code(traceback.format_exc())
-
-            # ==================================================================================
-    # ADD THIS CODE TO YOUR app.py AFTER THE TRANSFORMATION COMPLETES
-    # Replace the existing debug log section (if any) with this enhanced version
-    # This should go after: st.session_state.debug_log = transformer.debug_log
-    # ==================================================================================
-    
-    # Show debug log for RE API calls (Gifts Last Month)
-        if transformer.debug_log:
-            with st.expander("🔍 Debug Log - Recurring Gift API Lookups", expanded=True):
-                st.write(f"**Total recurring gift records processed:** {len(transformer.debug_log)}")
-                
-                # Summary statistics
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    api_called = sum(1 for log in transformer.debug_log if log.get('RE API Called'))
-                    st.metric("API Calls Made", api_called)
-                with col2:
-                    gifts_found = sum(1 for log in transformer.debug_log if 'Found' in str(log.get('Gifts Last Month Result', '')))
-                    st.metric("Gifts Found", gifts_found)
-                with col3:
-                    check_count = sum(1 for log in transformer.debug_log if log.get('Gifts Last Month Result', '').startswith('⚠️') or log.get('Gifts Last Month Result') == 'CHECK')
-                    st.metric("Needs CHECK", check_count)
-                with col4:
-                    errors = sum(1 for log in transformer.debug_log if 'Error' in str(log.get('Gifts Last Month Result', '')) or log.get('API Exception'))
-                    st.metric("Errors", errors)
-                
-                st.divider()
-                
-                # Filter options
-                filter_option = st.selectbox(
-                    "Filter by result:",
-                    ["All", "Gifts Found", "No Gifts (CHECK)", "Errors", "New Recurring (No Lookup)", "API Not Called"]
-                )
-                
-                debug_df = pd.DataFrame(transformer.debug_log)
-                
-                # Apply filter
-                if filter_option == "Gifts Found":
-                    debug_df = debug_df[debug_df['Gifts Last Month Result'].str.contains('Found', na=False)]
-                elif filter_option == "No Gifts (CHECK)":
-                    debug_df = debug_df[debug_df['Gifts Last Month Result'].str.contains('No gifts found', na=False)]
-                elif filter_option == "Errors":
-                    debug_df = debug_df[
-                        debug_df['Gifts Last Month Result'].str.contains('Error', na=False) | 
-                        debug_df['API Exception'].notna()
-                    ]
-                elif filter_option == "New Recurring (No Lookup)":
-                    debug_df = debug_df[debug_df['Gifts Last Month Result'].str.contains('New recurring', na=False)]
-                elif filter_option == "API Not Called":
-                    debug_df = debug_df[debug_df['RE API Called'] == False]
-                
-                st.write(f"**Showing {len(debug_df)} of {len(transformer.debug_log)} records**")
-                
-                # Display full dataframe
-                st.dataframe(debug_df, use_container_width=True)
-                
-                # Download full debug log
-                debug_csv = debug_df.to_csv(index=False)
-                st.download_button(
-                    label="📥 Download Debug Log CSV",
-                    data=debug_csv,
-                    file_name=f"RE_API_Debug_Log_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                    mime="text/csv"
-                )
-                
-                # Detailed view of individual records
-                st.divider()
-                st.subheader("📋 Detailed Record View")
-                
-                if len(debug_df) > 0:
-                    selected_txn = st.selectbox(
-                        "Select transaction to view details:",
-                        debug_df['EN Transaction ID'].tolist()
-                    )
-                    
-                    if selected_txn:
-                        record = debug_df[debug_df['EN Transaction ID'] == selected_txn].iloc[0].to_dict()
-                        
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            st.markdown("**Transaction Info**")
-                            st.json({
-                                'EN Transaction ID': record.get('EN Transaction ID'),
-                                'Campaign Type': record.get('Campaign Type'),
-                                'Campaign Date': record.get('Campaign Date (raw)'),
-                                'Campaign Data 16': record.get('Campaign Data 16 (raw)'),
-                                'Is New Recurring': record.get('Is New Recurring')
-                            })
-                            
-                            st.markdown("**RE System Info**")
-                            st.json({
-                                'RE System Record ID': record.get('RE System Record ID'),
-                                'RE ID Column Found': record.get('RE ID Column Found'),
-                                'RE API Available': record.get('RE API Available'),
-                                'RE API Authenticated': record.get('RE API Authenticated')
-                            })
-                        
-                        with col2:
-                            st.markdown("**Date Parsing**")
-                            st.json({
-                                'Parsed Campaign Date': record.get('Parsed Campaign Date'),
-                                'Parsed Data 16': record.get('Parsed Data 16'),
-                                'Gift Day': record.get('Gift Day'),
-                                'Previous Month/Year': record.get('Previous Month/Year'),
-                                'Days to Check': record.get('Days to Check'),
-                                'Target Dates': record.get('Target Dates')
-                            })
-                            
-                            st.markdown("**API Call Details**")
-                            api_info = {
-                                'Can Call API': record.get('Can Call API'),
-                                'RE API Called': record.get('RE API Called'),
-                                'API Endpoint': record.get('API Endpoint'),
-                                'API Response Status': record.get('API Response Status'),
-                                'API Total Gifts Count': record.get('API Total Gifts Count'),
-                                'API Filtered Count': record.get('API Filtered Count')
-                            }
-                            
-                            if record.get('API Exception'):
-                                api_info['Exception'] = record.get('API Exception')
-                                api_info['Exception Type'] = record.get('API Exception Type')
-                            
-                            if record.get('API Not Called Reasons'):
-                                api_info['Not Called Reasons'] = record.get('API Not Called Reasons')
-                            
-                            st.json(api_info)
-                        
-                        # Result
-                        st.markdown("**Result**")
-                        result_color = "green" if "Found" in str(record.get('Gifts Last Month Result', '')) else ("red" if "Error" in str(record.get('Gifts Last Month Result', '')) else "orange")
-                        st.markdown(f":{result_color}[{record.get('Gifts Last Month Result')}]")
-                        
-                        # Show API params if available
-                        if record.get('API Params'):
-                            st.markdown("**API Parameters**")
-                            st.json(record.get('API Params'))
-                        
-                        # Show raw response sample if available
-                        if record.get('API Raw Response Sample'):
-                            st.markdown("**API Raw Response Sample**")
-                            st.code(record.get('API Raw Response Sample'), language='json')
-                        
-                        # Show traceback if there was an exception
-                        if record.get('API Traceback'):
-                            st.markdown("**Exception Traceback**")
-                            st.code(record.get('API Traceback'), language='python')
-                        
-                        # Show formatted gift strings if found
-                        if record.get('Formatted Gift Strings'):
-                            st.markdown("**Gifts Found**")
-                            for gift_str in record.get('Formatted Gift Strings'):
-                                st.write(f"- {gift_str}")
-
-# ==================================================================================
-# END OF DEBUG DISPLAY CODE
-# ==================================================================================
             
             # Export section
             st.divider()
