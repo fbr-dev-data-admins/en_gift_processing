@@ -429,7 +429,7 @@ class GiftTransformer:
             val_lower = str(val).lower()
             if 'mastercard' in val_lower:
                 return 'Mastercard'
-            elif 'paypal' in val_lower:
+            elif 'paypal' in val_lower or 'venmo' in val_lower:
                 return 'Paypal'
             elif 'visa' in val_lower:
                 return 'Visa'
