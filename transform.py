@@ -37,10 +37,11 @@ class GiftTransformer:
         'First Name', 'Nickname', 'Middle Name', 'Last Name', 'Spouse First Name',
         'Spouse Nickname', 'Spouse Middle Name', 'Spouse Last Name', 'Address', 'City', 'State', 'ZIP',
         'Country', 'E-mail', 'Cell', 'EN Transaction ID', 'Gift Date', 'GL Post Date',
-        'Gift Amount', 'Donation Type', 'Gifts Last Month', 'EN Donation Form Name', 'Branch',
-        'Gift Reference', 'Campaign', 'Department', 'Appeal ID', 'Package', 'Gift Subtype', 'Pay Method',
-        'Addressee', 'Spouse Addressee', 'Salutation', 'Spouse Salutation', 'Monthly Donor Status Description',
-        'Monthly Donor Status Date', 'Monthly Donor Anniversary Description', 'Monthly Donor Anniversary Date',
+        'Gift Amount', 'Receipt Amount', 'Donation Type', 'Gifts Last Month', 'Letter Code',
+        'EN Donation Form Name', 'Branch', 'Gift Reference', 'Campaign', 'Department', 'Appeal ID',
+        'Package', 'Gift Subtype', 'Pay Method', 'Addressee', 'Spouse Addressee', 'Salutation',
+        'Spouse Salutation', 'Monthly Donor Status Description', 'Monthly Donor Status Date',
+        'Monthly Donor Anniversary Description', 'Monthly Donor Anniversary Date',
         'Monthly Donor Annual Statement Type', 'Monthly Donor Channel', 'Monthly Donor Payment Method',
         'Monthly Donor Region', 'EN Campaign ID', 'EN Campaign Name', 'Solicitor',
         'EN Fundraising Page ID', 'EN Fundraising Page Name', 'Credit Type', 'Stripe Transaction ID',
@@ -261,17 +262,22 @@ class GiftTransformer:
         # Direct field mappings
         output_df['EN Transaction ID'] = self._safe_column(df, 'EN Transaction ID')
         output_df['Gift Amount'] = self._safe_column(df, 'Campaign Data 4')
+        output_df['Receipt Amount'] = self._safe_column(df, 'Campaign Data 4')  # Same as Gift Amount
         output_df['Gift Date'] = self._safe_column(df, 'Campaign Date')
-        output_df['GL Post Date'] = self._safe_column(df, 'Campaign Date')
+        output_df['GL Post Date'] = self._safe_column(df, 'Campaign Date')  # Same as Gift Date
         output_df['Stripe Transaction ID'] = self._safe_column(df, 'Campaign Data 2')
+        
+        # Letter Code: "No Letter" for gift rows (non-QCB)
+        # Will be cleared for QCB rows later in the QCB processing section
+        output_df['Letter Code'] = 'No Letter'
         
         # Engaging Networks ID - clean to remove .0 from float values
         en_id_col = self._safe_column(df, 'Supporter ID')
         output_df['Engaging Networks ID'] = en_id_col.apply(self._clean_id)
         
         # Org Name (working column, removed in final export)
-        output_df['Org Name'] = self._safe_column(df, 'Company/Org Name', 
-                                  fallback_col='Company Name')
+        output_df['Org Name'] = self._safe_column(df, 'Organization or Company', 
+                                  fallback_col='Company/Org Name')
         
         # Constituent ID - try multiple column name variations
         # NOTE: Must use Raisers Edge Constituent ID, NOT LO Contact ID
@@ -461,11 +467,12 @@ class GiftTransformer:
         output_df.loc[org_mask, 'Key Indicator'] = 'O'
         
         # For QCB records, clear all non-biographical columns
+        qcb_indices = set()
         if 'Campaign Type' in df.columns:
-            qcb_indices = df[df['Campaign Type'] == 'QCB'].index
+            qcb_indices = set(df[df['Campaign Type'] == 'QCB'].index)
             for col in output_df.columns:
                 if col not in self.QCB_COLUMNS:
-                    output_df.loc[qcb_indices, col] = ''
+                    output_df.loc[list(qcb_indices), col] = ''
         
         # Format dates to mm/dd/yyyy
         date_columns = ['Gift Date', 'GL Post Date', 'Monthly Donor Status Date', 'Monthly Donor Anniversary Date']
@@ -484,6 +491,21 @@ class GiftTransformer:
         # Add any extra columns not in COLUMN_ORDER at the end
         extra_cols = [col for col in output_df.columns if col not in self.COLUMN_ORDER]
         output_df = output_df[ordered_cols + extra_cols]
+        
+        # Sort: Org Name filled (top), regular gifts (middle), QCB (bottom)
+        def get_sort_key(idx):
+            is_qcb = idx in qcb_indices
+            has_org = output_df.loc[idx, 'Org Name'] != '' and pd.notna(output_df.loc[idx, 'Org Name'])
+            if is_qcb:
+                return 2  # QCB at bottom
+            elif has_org:
+                return 0  # Org at top
+            else:
+                return 1  # Regular gifts in middle
+        
+        output_df['_sort_key'] = output_df.index.map(get_sort_key)
+        output_df = output_df.sort_values('_sort_key').drop(columns=['_sort_key'])
+        output_df = output_df.reset_index(drop=True)
         
         # Create exceptions dataframe
         exceptions_df = pd.DataFrame(self.exceptions) if self.exceptions else pd.DataFrame()
