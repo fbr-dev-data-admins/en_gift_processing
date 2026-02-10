@@ -696,7 +696,7 @@ if check_password():
                 if st.session_state.p2p_pending and len(st.session_state.p2p_pending) > 0:
                     st.error(f"⛔ **Cannot generate working file:** {len(st.session_state.p2p_pending)} P2P records need matching first. Please complete P2P matching in Tab 3 before exporting.")
                 else:
-                    st.warning("⚠️ **Important:** Download the working file below, then use VBA macro stored at L:\\Development Systems\\Database\\Engaging Networks\\Custom EN Transactions into RE\\{Version #.#} Import Preparation.xlsm to complete final processing before RE import.")
+                    st.warning("⚠️ **Important:** Download the working file below, then use VBA macro stored at L:\\Development Systems\\Database\\Engaging Networks\\Custom EN Transactions into RE\\\{Version #.#} Import Preparation.xlsm to complete final processing before RE import.")
                     
                     if st.button("📊 Generate Working Excel", type="primary"):
                         excel_buffer = create_excel_output(
