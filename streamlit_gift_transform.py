@@ -85,6 +85,95 @@ def save_json_config(filepath: str, data: dict):
         json.dump(data, f, indent=2)
 
 
+def push_config_to_github(repo_url: str, file_path: str, data: dict, token: str, commit_message: str = "Update config") -> bool:
+    """
+    Push updated JSON config to GitHub repository.
+    
+    Args:
+        repo_url: GitHub repo URL (e.g., "https://github.com/username/repo")
+        file_path: Path to file within repo (e.g., "config/P2P.json")
+        data: Dictionary to save as JSON
+        token: GitHub personal access token
+        commit_message: Commit message for the update
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Extract owner/repo from URL
+        parts = repo_url.rstrip('/').split('/')
+        owner = parts[-2]
+        repo = parts[-1].replace('.git', '')
+        
+        # GitHub API endpoint
+        api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}"
+        
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+        
+        # Get current file to get its SHA (required for updates)
+        response = requests.get(api_url, headers=headers)
+        
+        if response.status_code == 200:
+            current_file = response.json()
+            sha = current_file['sha']
+        else:
+            # File doesn't exist, no SHA needed
+            sha = None
+        
+        # Prepare the update
+        import base64
+        content = json.dumps(data, indent=2)
+        encoded_content = base64.b64encode(content.encode()).decode()
+        
+        payload = {
+            "message": commit_message,
+            "content": encoded_content,
+            "branch": "main"
+        }
+        
+        if sha:
+            payload["sha"] = sha
+        
+        # Push to GitHub
+        response = requests.put(api_url, headers=headers, json=payload)
+        
+        return response.status_code in [200, 201]
+        
+    except Exception as e:
+        st.error(f"Failed to push to GitHub: {e}")
+        return False
+
+
+def save_config_with_github_sync(filepath: str, data: dict, github_repo: str = "", github_token: str = "", config_type: str = "config"):
+    """
+    Save config locally and optionally push to GitHub.
+    
+    Args:
+        filepath: Local file path
+        data: Dictionary to save
+        github_repo: GitHub repo URL (optional)
+        github_token: GitHub access token (optional)
+        config_type: Type of config for commit message
+    """
+    # Always save locally first
+    save_json_config(filepath, data)
+    
+    # Push to GitHub if configured
+    if github_repo and github_token:
+        success = push_config_to_github(
+            repo_url=github_repo,
+            file_path=filepath,
+            data=data,
+            token=github_token,
+            commit_message=f"Update {config_type} via Streamlit app"
+        )
+        if not success:
+            st.warning(f"⚠️ Saved locally but failed to push to GitHub. Check your token permissions.")
+
+
 def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) -> BytesIO:
     """Create Excel workbook with conditional formatting and formulas"""
     output = BytesIO()
@@ -117,9 +206,8 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
             if header == 'Addressee' and 'Last Name' in col_letters and 'Spouse Last Name' in col_letters:
                 ln_col = col_letters['Last Name']
                 sln_col = col_letters['Spouse Last Name']
-                # Formula: =IFS(LastName=SpouseLastName,49,LastName<>SpouseLastName,48)
-                # But we need to handle empty spouse last name
-                formula = f'=IF({sln_col}{r_idx}="","",IFS({ln_col}{r_idx}={sln_col}{r_idx},49,{ln_col}{r_idx}<>{sln_col}{r_idx},48))'
+                # Formula: =IF(LastName=SpouseLastName,49,48)
+                formula = f'=IF({ln_col}{r_idx}={sln_col}{r_idx},49,48)'
                 ws_main.cell(row=r_idx, column=c_idx, value=formula)
             
             elif header == 'Spouse Addressee' and 'Addressee' in col_letters and 'Spouse Last Name' in col_letters:
@@ -142,12 +230,28 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
                 formula = f'=IF({sln_col}{r_idx}<>"",{sal_col}{r_idx},"")'
                 ws_main.cell(row=r_idx, column=c_idx, value=formula)
             
+            elif header == 'Nickname' and 'First Name' in col_letters:
+                fn_col = col_letters['First Name']
+                # Formula: =FirstName
+                formula = f'={fn_col}{r_idx}'
+                ws_main.cell(row=r_idx, column=c_idx, value=formula)
+            
+            elif header == 'Spouse Nickname' and 'Spouse First Name' in col_letters:
+                sfn_col = col_letters['Spouse First Name']
+                # Formula: =IF(SpouseFirstName<>"",SpouseFirstName,"")
+                formula = f'=IF({sfn_col}{r_idx}<>"",{sfn_col}{r_idx},"")'
+                ws_main.cell(row=r_idx, column=c_idx, value=formula)
+            
             else:
                 # Write regular value
                 if pd.isna(value):
                     ws_main.cell(row=r_idx, column=c_idx, value='')
                 else:
-                    ws_main.cell(row=r_idx, column=c_idx, value=value)
+                    cell_obj = ws_main.cell(row=r_idx, column=c_idx, value=value)
+                    
+                    # Format Cell column as text to prevent numeric interpretation
+                    if header == 'Cell':
+                        cell_obj.number_format = '@'  # Text format
     
     # Auto-adjust column widths
     for col in ws_main.columns:
@@ -167,7 +271,7 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
     
     # Conditional formatting rules
     yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-    red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+    orange_fill = PatternFill(start_color="F2AC57", end_color="F2AC57", fill_type="solid")
     
     # Highlight Spouse First Name if contains number (simpler formula that works with openpyxl)
     if "Spouse First Name" in col_letters:
@@ -186,10 +290,13 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
         col_letter = col_letters["Gifts Last Month"]
         ws_main.conditional_formatting.add(
             f'{col_letter}2:{col_letter}{len(df)+1}',
-            CellIsRule(operator='equal', formula=['"CHECK"'], fill=yellow_fill)
+            FormulaRule(
+                formula=[f'ISNUMBER(SEARCH("CHECK",{col_letter}2))'],
+                fill=yellow_fill
+            )
         )
-    
-    # Highlight RE Constituent ID and Appeal ID if Key Indicator = "O"
+        
+    # Highlight RE Constituent ID and Fund ID if Key Indicator = "O"
     if "Key Indicator" in col_letters:
         ki_letter = col_letters["Key Indicator"]
         
@@ -197,14 +304,41 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
             col_letter = col_letters["Constituent ID"]
             ws_main.conditional_formatting.add(
                 f'{col_letter}2:{col_letter}{len(df)+1}',
-                FormulaRule(formula=[f'AND(${ki_letter}2="O",{col_letter}2="")'], fill=red_fill)
+                FormulaRule(formula=[f'${ki_letter}2="O"'], fill=orange_fill)
             )
         
-        if "Appeal ID" in col_letters:
-            col_letter = col_letters["Appeal ID"]
+        if "Fund ID" in col_letters:
+            col_letter = col_letters["Fund ID"]
             ws_main.conditional_formatting.add(
                 f'{col_letter}2:{col_letter}{len(df)+1}',
-                FormulaRule(formula=[f'AND(${ki_letter}2="O",{col_letter}2="")'], fill=red_fill)
+                FormulaRule(formula=[f'${ki_letter}2="O"'], fill=orange_fill)
+            )
+    
+    # Highlight blank Country when any address field has data
+    if "Country" in col_letters:
+        country_col = col_letters["Country"]
+        addr_col = col_letters.get("Address", "")
+        city_col = col_letters.get("City", "")
+        state_col = col_letters.get("State", "")
+        zip_col = col_letters.get("ZIP", "")
+        
+        # Build formula: Country is blank AND (Address<>"" OR City<>"" OR State<>"" OR ZIP<>"")
+        conditions = []
+        if addr_col:
+            conditions.append(f'{addr_col}2<>""')
+        if city_col:
+            conditions.append(f'{city_col}2<>""')
+        if state_col:
+            conditions.append(f'{state_col}2<>""')
+        if zip_col:
+            conditions.append(f'{zip_col}2<>""')
+        
+        if conditions:
+            or_formula = ",".join(conditions)
+            formula = f'AND({country_col}2="",OR({or_formula}))'
+            ws_main.conditional_formatting.add(
+                f'{country_col}2:{country_col}{len(df)+1}',
+                FormulaRule(formula=[formula], fill=yellow_fill)
             )
     
     # Add exceptions sheet if there are exceptions
@@ -294,6 +428,7 @@ if check_password():
     
     # Check for GitHub repo configuration
     github_repo = st.secrets.get("github", {}).get("config_repo", "")
+    github_token = st.secrets.get("github", {}).get("access_token", "")
     
     if github_repo:
         # Load from GitHub
@@ -407,26 +542,28 @@ if check_password():
                         st.error(f"Error fetching data: {e}")
                         st.info("💡 Make sure your EN API token is correct and has bulk export permissions.")
         
-        # Alternative: Upload CSV
-        st.divider()
-        st.subheader("Or Upload Existing CSV")
-        uploaded_csv = st.file_uploader("Upload EN Export CSV", type=['csv'])
-        if uploaded_csv:
-            try:
-                # Try multiple encodings
-                for encoding in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']:
-                    try:
-                        uploaded_csv.seek(0)
-                        df = pd.read_csv(uploaded_csv, encoding=encoding)
-                        break
-                    except UnicodeDecodeError:
-                        continue
-                
-                st.session_state.raw_df = df
-                st.success(f"✅ Loaded {len(df)} records from CSV")
-                st.dataframe(df.head(20))
-            except Exception as e:
-                st.error(f"Error loading CSV: {e}")
+        # # ---------- FILE UPLOAD SECTION (COMMENTED OUT FOR PRODUCTION) ----------
+        # # Alternative: Upload CSV - uncomment for testing
+        # st.divider()
+        # st.subheader("Or Upload Existing CSV")
+        # uploaded_csv = st.file_uploader("Upload EN Export CSV", type=['csv'])
+        # if uploaded_csv:
+        #     try:
+        #         # Try multiple encodings
+        #         for encoding in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']:
+        #             try:
+        #                 uploaded_csv.seek(0)
+        #                 df = pd.read_csv(uploaded_csv, encoding=encoding)
+        #                 break
+        #             except UnicodeDecodeError:
+        #                 continue
+        #         
+        #         st.session_state.raw_df = df
+        #         st.success(f"✅ Loaded {len(df)} records from CSV")
+        #         st.dataframe(df.head(20))
+        #     except Exception as e:
+        #         st.error(f"Error loading CSV: {e}")
+        # # ---------- END FILE UPLOAD SECTION ----------
     
     # ---------- TAB 2: TRANSFORM ----------
     with tab2:
@@ -486,25 +623,43 @@ if check_password():
                             st.subheader(f"Form: {form_name}")
                             col1, col2, col3 = st.columns(3)
                             with col1:
-                                appeal = st.text_input(f"Appeal for {form_name}", key=f"appeal_{form_name}")
+                                appeal = st.text_input(f"Appeal for {form_name} (do not include FY number)", key=f"appeal_{form_name}")
                             with col2:
                                 fund = st.text_input(f"Fund for {form_name}", key=f"fund_{form_name}")
                             with col3:
                                 is_match = st.checkbox(f"MATCH package?", key=f"match_{form_name}")
                             
                             if st.button(f"Save {form_name}", key=f"save_{form_name}"):
+                                # Initialize forms dict if not exists
                                 if 'forms' not in mapping_config:
                                     mapping_config['forms'] = {}
+                                
+                                # Add form mapping
                                 mapping_config['forms'][form_name] = {
                                     'appeal': appeal,
                                     'fund': fund
                                 }
+                                
+                                # Add to MATCH list if checked
                                 if is_match:
                                     if 'MATCH' not in mapping_config:
                                         mapping_config['MATCH'] = []
-                                    mapping_config['MATCH'].append(form_name)
-                                save_json_config(mapping_path, mapping_config)
-                                st.success(f"Saved mapping for {form_name}")
+                                    if form_name not in mapping_config['MATCH']:
+                                        mapping_config['MATCH'].append(form_name)
+                                
+                                # Save with GitHub sync (same pattern as P2P config)
+                                save_config_with_github_sync(
+                                    mapping_path, 
+                                    mapping_config, 
+                                    github_repo, 
+                                    github_token, 
+                                    "mapping config"
+                                )
+                                
+                                # Update session state
+                                st.session_state.mapping_config = mapping_config
+                                
+                                st.success(f"✅ Saved mapping for {form_name}" + (" (with MATCH)" if is_match else ""))
                                 st.rerun()
             
             if st.button("🔄 Run Transformation", type="primary"):
@@ -527,6 +682,12 @@ if check_password():
                             re_api=st.session_state.re_api
                         )
                         
+                        # Save P2P config if there were any auto-updates during transformation
+                        if transformer.p2p_config_updates:
+                            save_config_with_github_sync(p2p_path, p2p_config, github_repo, github_token, "P2P config")
+                            st.session_state.p2p_config = p2p_config  # Update session state
+                            st.info(f"✅ Auto-matched {len(transformer.p2p_config_updates)} P2P solicitor(s) and updated config")
+                        
                         st.session_state.processed_df = processed_df
                         st.session_state.exceptions_df = exceptions_df
                         st.session_state.p2p_pending = p2p_pending
@@ -548,196 +709,191 @@ if check_password():
                             with st.expander("View Exceptions"):
                                 st.dataframe(exceptions_df)
                         
-                        # Show debug log for RE API calls (Gifts Last Month)
-                        if transformer.debug_log:
-                            with st.expander("🔍 Debug Log - Recurring Gift API Lookups", expanded=True):
-                                st.write(f"**Total recurring gift records processed:** {len(transformer.debug_log)}")
-                                
-                                # Summary statistics
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    api_called = sum(1 for log in transformer.debug_log if log.get('RE API Called'))
-                                    st.metric("API Calls Made", api_called)
-                                with col2:
-                                    gifts_found = sum(1 for log in transformer.debug_log if 'Found' in str(log.get('Gifts Last Month Result', '')))
-                                    st.metric("Gifts Found", gifts_found)
-                                with col3:
-                                    check_count = sum(1 for log in transformer.debug_log if log.get('Gifts Last Month Result', '').startswith('⚠️') or log.get('Gifts Last Month Result') == 'CHECK')
-                                    st.metric("Needs CHECK", check_count)
-                                with col4:
-                                    errors = sum(1 for log in transformer.debug_log if 'Error' in str(log.get('Gifts Last Month Result', '')) or log.get('API Exception'))
-                                    st.metric("Errors", errors)
-                                
-                                st.divider()
-                                
-                                # Filter options
-                                filter_option = st.selectbox(
-                                    "Filter by result:",
-                                    ["All", "Gifts Found", "No Gifts (CHECK)", "Errors", "New Recurring (No Lookup)", "API Not Called"]
-                                )
-                                
-                                debug_df = pd.DataFrame(transformer.debug_log)
-                                
-                                # Apply filter
-                                if filter_option == "Gifts Found":
-                                    debug_df = debug_df[debug_df['Gifts Last Month Result'].str.contains('Found', na=False)]
-                                elif filter_option == "No Gifts (CHECK)":
-                                    debug_df = debug_df[debug_df['Gifts Last Month Result'].str.contains('No gifts found', na=False)]
-                                elif filter_option == "Errors":
-                                    debug_df = debug_df[
-                                        debug_df['Gifts Last Month Result'].str.contains('Error', na=False) | 
-                                        debug_df['API Exception'].notna()
-                                    ]
-                                elif filter_option == "New Recurring (No Lookup)":
-                                    debug_df = debug_df[debug_df['Gifts Last Month Result'].str.contains('New recurring', na=False)]
-                                elif filter_option == "API Not Called":
-                                    debug_df = debug_df[debug_df['RE API Called'] == False]
-                                
-                                st.write(f"**Showing {len(debug_df)} of {len(transformer.debug_log)} records**")
-                                
-                                # Display full dataframe
-                                st.dataframe(debug_df, use_container_width=True)
-                                
-                                # Download full debug log
-                                debug_csv = debug_df.to_csv(index=False)
-                                st.download_button(
-                                    label="📥 Download Debug Log CSV",
-                                    data=debug_csv,
-                                    file_name=f"RE_API_Debug_Log_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                                    mime="text/csv"
-                                )
-                                
-                                # Detailed view of individual records
-                                st.divider()
-                                st.subheader("📋 Detailed Record View")
-                                
-                                if len(debug_df) > 0:
-                                    selected_txn = st.selectbox(
-                                        "Select transaction to view details:",
-                                        debug_df['EN Transaction ID'].tolist()
-                                    )
-                                    
-                                    if selected_txn:
-                                        record = debug_df[debug_df['EN Transaction ID'] == selected_txn].iloc[0].to_dict()
-                                        
-                                        col1, col2 = st.columns(2)
-                                        
-                                        with col1:
-                                            st.markdown("**Transaction Info**")
-                                            st.json({
-                                                'EN Transaction ID': record.get('EN Transaction ID'),
-                                                'Campaign Type': record.get('Campaign Type'),
-                                                'Campaign Date': record.get('Campaign Date (raw)'),
-                                                'Campaign Data 16': record.get('Campaign Data 16 (raw)'),
-                                                'Is New Recurring': record.get('Is New Recurring')
-                                            })
-                                            
-                                            st.markdown("**RE System Info**")
-                                            st.json({
-                                                'RE System Record ID': record.get('RE System Record ID'),
-                                                'RE ID Column Found': record.get('RE ID Column Found'),
-                                                'RE API Available': record.get('RE API Available'),
-                                                'RE API Authenticated': record.get('RE API Authenticated')
-                                            })
-                                        
-                                        with col2:
-                                            st.markdown("**Date Parsing**")
-                                            st.json({
-                                                'Parsed Campaign Date': record.get('Parsed Campaign Date'),
-                                                'Parsed Data 16': record.get('Parsed Data 16'),
-                                                'Gift Day': record.get('Gift Day'),
-                                                'Previous Month/Year': record.get('Previous Month/Year'),
-                                                'Days to Check': record.get('Days to Check'),
-                                                'Target Dates': record.get('Target Dates')
-                                            })
-                                            
-                                            st.markdown("**API Call Details**")
-                                            api_info = {
-                                                'Can Call API': record.get('Can Call API'),
-                                                'RE API Called': record.get('RE API Called'),
-                                                'API Endpoint': record.get('API Endpoint'),
-                                                'API Response Status': record.get('API Response Status'),
-                                                'API Total Gifts Count': record.get('API Total Gifts Count'),
-                                                'API Filtered Count': record.get('API Filtered Count')
-                                            }
-                                            
-                                            if record.get('API Exception'):
-                                                api_info['Exception'] = record.get('API Exception')
-                                                api_info['Exception Type'] = record.get('API Exception Type')
-                                            
-                                            if record.get('API Not Called Reasons'):
-                                                api_info['Not Called Reasons'] = record.get('API Not Called Reasons')
-                                            
-                                            st.json(api_info)
-                                        
-                                        # Result
-                                        st.markdown("**Result**")
-                                        result_color = "green" if "Found" in str(record.get('Gifts Last Month Result', '')) else ("red" if "Error" in str(record.get('Gifts Last Month Result', '')) else "orange")
-                                        st.markdown(f":{result_color}[{record.get('Gifts Last Month Result')}]")
-                                        
-                                        # Show API params if available
-                                        if record.get('API Params'):
-                                            st.markdown("**API Parameters**")
-                                            st.json(record.get('API Params'))
-                                        
-                                        # Show raw response sample if available
-                                        if record.get('API Raw Response Sample'):
-                                            st.markdown("**API Raw Response Sample**")
-                                            st.code(record.get('API Raw Response Sample'), language='json')
-                                        
-                                        # Show traceback if there was an exception
-                                        if record.get('API Traceback'):
-                                            st.markdown("**Exception Traceback**")
-                                            st.code(record.get('API Traceback'), language='python')
-                                        
-                                        # Show formatted gift strings if found
-                                        if record.get('Formatted Gift Strings'):
-                                            st.markdown("**Gifts Found**")
-                                            for gift_str in record.get('Formatted Gift Strings'):
-                                                st.write(f"- {gift_str}")
-                        
                     except Exception as e:
                         st.error(f"Transformation error: {e}")
                         import traceback
                         st.code(traceback.format_exc())
-            
-            # Show input column names for debugging
-            with st.expander("📋 Input Data Column Names"):
-                st.write("Available columns in input data:")
-                st.write(list(st.session_state.raw_df.columns))
+
+            # ==================================================================================
+    # ADD THIS CODE TO YOUR app.py AFTER THE TRANSFORMATION COMPLETES
+    # Replace the existing debug log section (if any) with this enhanced version
+    # This should go after: st.session_state.debug_log = transformer.debug_log
+    # ==================================================================================
+    
+    # Show debug log for RE API calls (Gifts Last Month)
+        if transformer.debug_log:
+            with st.expander("🔍 Debug Log - Recurring Gift API Lookups", expanded=True):
+                st.write(f"**Total recurring gift records processed:** {len(transformer.debug_log)}")
+                
+                # Summary statistics
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    api_called = sum(1 for log in transformer.debug_log if log.get('RE API Called'))
+                    st.metric("API Calls Made", api_called)
+                with col2:
+                    gifts_found = sum(1 for log in transformer.debug_log if 'Found' in str(log.get('Gifts Last Month Result', '')))
+                    st.metric("Gifts Found", gifts_found)
+                with col3:
+                    check_count = sum(1 for log in transformer.debug_log if log.get('Gifts Last Month Result', '').startswith('⚠️') or log.get('Gifts Last Month Result') == 'CHECK')
+                    st.metric("Needs CHECK", check_count)
+                with col4:
+                    errors = sum(1 for log in transformer.debug_log if 'Error' in str(log.get('Gifts Last Month Result', '')) or log.get('API Exception'))
+                    st.metric("Errors", errors)
+                
+                st.divider()
+                
+                # Filter options
+                filter_option = st.selectbox(
+                    "Filter by result:",
+                    ["All", "Gifts Found", "No Gifts (CHECK)", "Errors", "New Recurring (No Lookup)", "API Not Called"]
+                )
+                
+                debug_df = pd.DataFrame(transformer.debug_log)
+                
+                # Apply filter
+                if filter_option == "Gifts Found":
+                    debug_df = debug_df[debug_df['Gifts Last Month Result'].str.contains('Found', na=False)]
+                elif filter_option == "No Gifts (CHECK)":
+                    debug_df = debug_df[debug_df['Gifts Last Month Result'].str.contains('No gifts found', na=False)]
+                elif filter_option == "Errors":
+                    debug_df = debug_df[
+                        debug_df['Gifts Last Month Result'].str.contains('Error', na=False) | 
+                        debug_df['API Exception'].notna()
+                    ]
+                elif filter_option == "New Recurring (No Lookup)":
+                    debug_df = debug_df[debug_df['Gifts Last Month Result'].str.contains('New recurring', na=False)]
+                elif filter_option == "API Not Called":
+                    debug_df = debug_df[debug_df['RE API Called'] == False]
+                
+                st.write(f"**Showing {len(debug_df)} of {len(transformer.debug_log)} records**")
+                
+                # Display full dataframe
+                st.dataframe(debug_df, use_container_width=True)
+                
+                # Download full debug log
+                debug_csv = debug_df.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download Debug Log CSV",
+                    data=debug_csv,
+                    file_name=f"RE_API_Debug_Log_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv"
+                )
+                
+                # Detailed view of individual records
+                st.divider()
+                st.subheader("📋 Detailed Record View")
+                
+                if len(debug_df) > 0:
+                    selected_txn = st.selectbox(
+                        "Select transaction to view details:",
+                        debug_df['EN Transaction ID'].tolist()
+                    )
+                    
+                    if selected_txn:
+                        record = debug_df[debug_df['EN Transaction ID'] == selected_txn].iloc[0].to_dict()
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown("**Transaction Info**")
+                            st.json({
+                                'EN Transaction ID': record.get('EN Transaction ID'),
+                                'Campaign Type': record.get('Campaign Type'),
+                                'Campaign Date': record.get('Campaign Date (raw)'),
+                                'Campaign Data 16': record.get('Campaign Data 16 (raw)'),
+                                'Is New Recurring': record.get('Is New Recurring')
+                            })
+                            
+                            st.markdown("**RE System Info**")
+                            st.json({
+                                'RE System Record ID': record.get('RE System Record ID'),
+                                'RE ID Column Found': record.get('RE ID Column Found'),
+                                'RE API Available': record.get('RE API Available'),
+                                'RE API Authenticated': record.get('RE API Authenticated')
+                            })
+                        
+                        with col2:
+                            st.markdown("**Date Parsing**")
+                            st.json({
+                                'Parsed Campaign Date': record.get('Parsed Campaign Date'),
+                                'Parsed Data 16': record.get('Parsed Data 16'),
+                                'Gift Day': record.get('Gift Day'),
+                                'Previous Month/Year': record.get('Previous Month/Year'),
+                                'Days to Check': record.get('Days to Check'),
+                                'Target Dates': record.get('Target Dates')
+                            })
+                            
+                            st.markdown("**API Call Details**")
+                            api_info = {
+                                'Can Call API': record.get('Can Call API'),
+                                'RE API Called': record.get('RE API Called'),
+                                'API Endpoint': record.get('API Endpoint'),
+                                'API Response Status': record.get('API Response Status'),
+                                'API Total Gifts Count': record.get('API Total Gifts Count'),
+                                'API Filtered Count': record.get('API Filtered Count')
+                            }
+                            
+                            if record.get('API Exception'):
+                                api_info['Exception'] = record.get('API Exception')
+                                api_info['Exception Type'] = record.get('API Exception Type')
+                            
+                            if record.get('API Not Called Reasons'):
+                                api_info['Not Called Reasons'] = record.get('API Not Called Reasons')
+                            
+                            st.json(api_info)
+                        
+                        # Result
+                        st.markdown("**Result**")
+                        result_color = "green" if "Found" in str(record.get('Gifts Last Month Result', '')) else ("red" if "Error" in str(record.get('Gifts Last Month Result', '')) else "orange")
+                        st.markdown(f":{result_color}[{record.get('Gifts Last Month Result')}]")
+                        
+                        # Show API params if available
+                        if record.get('API Params'):
+                            st.markdown("**API Parameters**")
+                            st.json(record.get('API Params'))
+                        
+                        # Show raw response sample if available
+                        if record.get('API Raw Response Sample'):
+                            st.markdown("**API Raw Response Sample**")
+                            st.code(record.get('API Raw Response Sample'), language='json')
+                        
+                        # Show traceback if there was an exception
+                        if record.get('API Traceback'):
+                            st.markdown("**Exception Traceback**")
+                            st.code(record.get('API Traceback'), language='python')
+                        
+                        # Show formatted gift strings if found
+                        if record.get('Formatted Gift Strings'):
+                            st.markdown("**Gifts Found**")
+                            for gift_str in record.get('Formatted Gift Strings'):
+                                st.write(f"- {gift_str}")
+
+# ==================================================================================
+# END OF DEBUG DISPLAY CODE
+# ==================================================================================
             
             # Export section
             st.divider()
             st.subheader("📤 Export Working File")
             
             if st.session_state.processed_df is not None and len(st.session_state.processed_df) > 0:
-                st.warning("⚠️ **Important:** Download the working file below, then use the VBA macro (GiftImportProcessor.bas) to complete final processing before RE import.")
-                st.info("""
-                **VBA Macro Steps:**
-                1. Open the downloaded Excel file
-                2. Press Alt+F11 to open VBA Editor
-                3. File → Import File → Select GiftImportProcessor.bas
-                4. Close VBA Editor and Save As .xlsm
-                5. Run macro: Alt+F8 → ProcessGiftImport → Run
-                
-                The macro will:
-                - Validate Key Indicator = "O" records have RE Constituent ID
-                - Clear personal info for organization records
-                - Remove working columns
-                - Export final import file
-                """)
-                
-                if st.button("📊 Generate Working Excel", type="primary"):
-                    excel_buffer = create_excel_output(
-                        st.session_state.processed_df, 
-                        st.session_state.exceptions_df
-                    )
-                    st.download_button(
-                        label="📥 Download Working File",
-                        data=excel_buffer,
-                        file_name=f"EN_Gift_Transform_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+                # Check if P2P matching is pending
+                if st.session_state.p2p_pending and len(st.session_state.p2p_pending) > 0:
+                    st.error(f"⛔ **Cannot generate working file:** {len(st.session_state.p2p_pending)} P2P records need matching first. Please complete P2P matching in Tab 3 before exporting.")
+                else:
+                    st.warning("⚠️ **Important:** Download the working file below, then use VBA macro stored at L:\\Development Systems\\Database\\Engaging Networks\\Custom EN Transactions into RE\\\{Version #.#} Import Preparation.xlsm to complete final processing before RE import.")
+                    
+                    if st.button("📊 Generate Working Excel", type="primary"):
+                        excel_buffer = create_excel_output(
+                            st.session_state.processed_df, 
+                            st.session_state.exceptions_df
+                        )
+                        st.download_button(
+                            label="📥 Download Working File",
+                            data=excel_buffer,
+                            file_name=f"EN_Gift_Transform_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
             else:
                 st.info("Run transformation first to enable export.")
     
@@ -746,61 +902,107 @@ if check_password():
         st.header("Step 3: P2P Solicitor Matching")
         
         if not st.session_state.p2p_pending:
-            st.info("No P2P records pending matching.")
+            st.success("✅ No P2P records pending matching.")
         else:
             st.warning(f"⚠️ {len(st.session_state.p2p_pending)} records need P2P matching")
             
             for i, record in enumerate(st.session_state.p2p_pending):
-                with st.expander(f"Record {i+1}: {record.get('campaign_data_10', 'Unknown')}"):
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.subheader("EN Data")
-                        st.write(f"**Campaign Number:** {record.get('campaign_number', '')}")
-                        st.write(f"**Campaign Data 6:** {record.get('campaign_data_6', '')}")
-                        st.write(f"**Campaign Data 7:** {record.get('campaign_data_7', '')}")
-                        st.write(f"**Campaign Data 10 (Name):** {record.get('campaign_data_10', '')}")
-                        st.write(f"**Campaign Data 11 (Email):** {record.get('campaign_data_11', '')}")
-                    
-                    with col2:
-                        st.subheader("RE Match")
-                        if record.get('re_match'):
-                            match = record['re_match']
-                            st.write(f"**RE Constituent ID:** {match.get('id', '')}")
-                            st.write(f"**Name:** {match.get('name', '')}")
-                            st.write(f"**Matched on:** {match.get('matched_on', '')}")
-                            
-                            if st.button(f"✅ Accept Match", key=f"accept_{i}"):
-                                # Save to P2P.json
-                                p2p_config[record['campaign_number']] = {
-                                    'EN Campaign Name': record.get('campaign_data_10', ''),
-                                    'Solicitor': match['id']
-                                }
-                                save_json_config(p2p_path, p2p_config)
-                                
-                                # Mark as solicitor in RE
-                                if st.session_state.re_api and st.session_state.re_api.is_authenticated():
-                                    st.session_state.re_api.mark_as_solicitor(match['id'])
-                                
-                                st.session_state.p2p_pending.pop(i)
-                                st.success("Match saved!")
-                                st.rerun()
-                        else:
-                            st.warning("No automatic match found")
+                campaign_type = record.get('campaign_type', '')
+                campaign_num = record.get('campaign_number', '')  # Use for unique keys
+                
+                # Different display for PFTC vs other P2P types
+                if campaign_type == 'PFTC':
+                    # PFTC: Show row number, campaign number, campaign data 6, 7, 10, 11
+                    with st.expander(f"PFTC Record - Row {record.get('row_number', 'N/A')}: {record.get('campaign_data_10', 'Unknown')}"):
+                        col1, col2 = st.columns(2)
                         
-                        # Manual entry
-                        manual_id = st.text_input(f"Enter RE Constituent ID manually:", key=f"manual_{i}")
-                        if st.button(f"💾 Save Manual Match", key=f"save_manual_{i}"):
-                            if manual_id:
-                                p2p_config[record['campaign_number']] = {
-                                    'EN Campaign Name': record.get('campaign_data_10', ''),
+                        with col1:
+                            st.subheader("EN Data")
+                            st.write(f"**Row Number:** {record.get('row_number', '')}")
+                            st.write(f"**Campaign Number:** {campaign_num}")
+                            st.write(f"**Campaign Data 6:** {record.get('campaign_data_6', '')}")
+                            st.write(f"**Campaign Data 7:** {record.get('campaign_data_7', '')}")
+                            st.write(f"**Campaign Data 10 (Name):** {record.get('campaign_data_10', '')}")
+                            st.write(f"**Campaign Data 11 (Email):** {record.get('campaign_data_11', '')}")
+                        
+                        with col2:
+                            st.subheader("RE Match")
+                            if record.get('re_match'):
+                                match = record['re_match']
+                                st.write(f"**RE Constituent ID:** {match.get('id', '')}")
+                                st.write(f"**Name:** {match.get('name', '')}")
+                                st.write(f"**Matched on:** {match.get('matched_on', '')}")
+                                
+                                if st.button(f"✅ Accept Match", key=f"accept_{campaign_num}"):
+                                    # Save to P2P.json - EN Campaign Name auto-populates from campaign_data_10
+                                    p2p_config[campaign_num] = {
+                                        'EN Campaign Name': record.get('campaign_data_10', ''),
+                                        'Solicitor': match['id']
+                                    }
+                                    save_config_with_github_sync(p2p_path, p2p_config, github_repo, github_token, "P2P config")
+                                    
+                                    # Update session state
+                                    st.session_state.p2p_config = p2p_config
+                                    
+                                    st.session_state.p2p_pending.pop(i)
+                                    st.success("Match saved!")
+                                    st.rerun()
+                            else:
+                                st.warning("No automatic match found")
+                            
+                            # Manual entry - only RE Constituent ID for PFTC (EN Campaign Name auto-populates)
+                            manual_id = st.text_input(f"Enter RE Constituent ID manually:", key=f"manual_id_{campaign_num}")
+                            if st.button(f"💾 Save Manual Match", key=f"save_manual_{campaign_num}"):
+                                if manual_id:
+                                    p2p_config[campaign_num] = {
+                                        'EN Campaign Name': record.get('campaign_data_10', ''),
+                                        'Solicitor': manual_id
+                                    }
+                                    save_config_with_github_sync(p2p_path, p2p_config, github_repo, github_token, "P2P config")
+                                    
+                                    # Update session state
+                                    st.session_state.p2p_config = p2p_config
+                                    
+                                    st.session_state.p2p_pending.pop(i)
+                                    st.success("Manual match saved!")
+                                    st.rerun()
+                else:
+                    # PFCS, PFCR, PFBS, PFBR: Show campaign number, region page, and message
+                    with st.expander(f"{campaign_type} Record - Row {record.get('row_number', 'N/A')}: Campaign {campaign_num}"):
+                        st.subheader("P2P Gift Details")
+                        st.write(f"**Row Number:** {record.get('row_number', '')}")
+                        st.write(f"**Campaign Number:** {campaign_num}")
+                        st.write(f"**Campaign Type:** {campaign_type}")
+                        st.write(f"**Region Page:** {record.get('campaign_id', '')}")
+                        
+                        st.info("""
+**Please look up additional details in the P2P module for this region:**
+
+Peer-to-Peer → Sites → Edit identified site (square and pencil) → Teams → Match on Page ID → Input Page Name and the identified solicitor RE Constituent ID
+
+or if not found there:
+
+Peer-to-Peer → Sites → Edit identified site (square and pencil) → Fundraisers → Match on Page ID → Input Page Name and the identified solicitor RE Constituent ID
+                        """)
+                        
+                        # Manual entry - both RE Constituent ID AND EN Campaign Name for non-PFTC
+                        st.subheader("Manual Entry Required")
+                        manual_campaign_name = st.text_input(f"EN Campaign Name:", key=f"campaign_name_{campaign_num}")
+                        manual_id = st.text_input(f"RE Constituent ID (Solicitor):", key=f"manual_id_{campaign_num}")
+                        
+                        if st.button(f"💾 Save P2P Match", key=f"save_manual_{campaign_num}"):
+                            if manual_id and manual_campaign_name:
+                                p2p_config[campaign_num] = {
+                                    'EN Campaign Name': manual_campaign_name,
                                     'Solicitor': manual_id
                                 }
-                                save_json_config(p2p_path, p2p_config)
+                                save_config_with_github_sync(p2p_path, p2p_config, github_repo, github_token, "P2P config")
                                 
-                                if st.session_state.re_api and st.session_state.re_api.is_authenticated():
-                                    st.session_state.re_api.mark_as_solicitor(manual_id)
+                                # Update session state
+                                st.session_state.p2p_config = p2p_config
                                 
                                 st.session_state.p2p_pending.pop(i)
-                                st.success("Manual match saved!")
+                                st.success("P2P match saved!")
                                 st.rerun()
+                            else:
+                                st.error("Please enter both EN Campaign Name and RE Constituent ID")
