@@ -809,7 +809,7 @@ class GiftTransformer:
             anniversary_desc = campaign_date.strftime('%B')  # Month name (MMMM)
             anniversary_date = campaign_date.strftime('%Y-%m-%d')
             statement_type = 'Emailed'
-            channel = 'Digital -- Recurring'
+            channel = 'Digital - Recurring'
             gifts_last_month = ''
             debug_entry['Gifts Last Month Result'] = '(New recurring - no lookup needed)'
         else:
