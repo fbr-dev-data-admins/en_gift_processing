@@ -233,7 +233,7 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
             elif header == 'Nickname' and 'First Name' in col_letters:
                 fn_col = col_letters['First Name']
                 # Formula: =FirstName
-                formula = f'=IF({fn_col}{r_idx}<>"",{fn_col}{r_idx},"")'
+                formula = f'={fn_col}{r_idx}'
                 ws_main.cell(row=r_idx, column=c_idx, value=formula)
             
             elif header == 'Spouse Nickname' and 'Spouse First Name' in col_letters:
@@ -694,14 +694,33 @@ if check_password():
                         # This avoids per-row API calls which hit rate limits
                         cached_gifts = {}
                         cached_gifts_debug = {}
+                        batch_fetch_debug = {
+                            're_api_available': bool(st.session_state.re_api),
+                            're_api_authenticated': False,
+                            'has_recurring_records': False,
+                            'recurring_count': 0,
+                            'campaign_date_column_exists': 'Campaign Date' in df.columns,
+                            'valid_dates_count': 0,
+                            'date_range_calculated': False,
+                            'cache_key': None,
+                            'used_cached': False,
+                            'api_call_made': False,
+                            'api_call_result': None,
+                            'error': None
+                        }
                         
                         re_api = st.session_state.re_api
+                        if re_api:
+                            batch_fetch_debug['re_api_authenticated'] = re_api.is_authenticated()
+                        
                         if re_api and re_api.is_authenticated():
                             # Check if we have recurring gift records that need gift lookup
                             has_recurring = False
                             if 'Campaign Type' in df.columns:
                                 recurring_mask = df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])
                                 has_recurring = recurring_mask.any()
+                                batch_fetch_debug['has_recurring_records'] = has_recurring
+                                batch_fetch_debug['recurring_count'] = recurring_mask.sum()
                             
                             if has_recurring:
                                 # Calculate the previous month's date range based on the EN data dates
@@ -709,6 +728,7 @@ if check_password():
                                     # Parse campaign dates to find the date range
                                     campaign_dates = pd.to_datetime(df['Campaign Date'], errors='coerce')
                                     valid_dates = campaign_dates.dropna()
+                                    batch_fetch_debug['valid_dates_count'] = len(valid_dates)
                                     
                                     if len(valid_dates) > 0:
                                         min_date = valid_dates.min()
@@ -722,22 +742,43 @@ if check_password():
                                         start_date_str = prev_min_date.strftime('%Y-%m-%d')
                                         end_date_str = prev_max_date.strftime('%Y-%m-%d')
                                         
+                                        batch_fetch_debug['date_range_calculated'] = True
+                                        batch_fetch_debug['en_date_range'] = f"{min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')}"
+                                        batch_fetch_debug['prev_month_date_range'] = f"{start_date_str} to {end_date_str}"
+                                        
                                         # Check if we have cached gifts for this date range in session state
                                         cache_key = f"{start_date_str}_{end_date_str}"
+                                        batch_fetch_debug['cache_key'] = cache_key
+                                        
                                         if 'gifts_cache' not in st.session_state:
                                             st.session_state.gifts_cache = {}
                                         
                                         if cache_key in st.session_state.gifts_cache:
                                             cached_gifts = st.session_state.gifts_cache[cache_key]
+                                            batch_fetch_debug['used_cached'] = True
+                                            batch_fetch_debug['cached_constituents_count'] = len(cached_gifts)
                                         else:
                                             # Fetch gifts from RE API in batch
-                                            cached_gifts, cached_gifts_debug = re_api.get_gifts_for_date_range(
-                                                start_date=start_date_str,
-                                                end_date=end_date_str
-                                            )
-                                            
-                                            # Store in session state for potential re-runs
-                                            st.session_state.gifts_cache[cache_key] = cached_gifts
+                                            batch_fetch_debug['api_call_made'] = True
+                                            try:
+                                                cached_gifts, cached_gifts_debug = re_api.get_gifts_for_date_range(
+                                                    start_date=start_date_str,
+                                                    end_date=end_date_str
+                                                )
+                                                batch_fetch_debug['api_call_result'] = cached_gifts_debug
+                                                batch_fetch_debug['gifts_fetched'] = cached_gifts_debug.get('total_gifts_fetched', 0)
+                                                batch_fetch_debug['unique_constituents'] = len(cached_gifts)
+                                                
+                                                # Store in session state for potential re-runs
+                                                st.session_state.gifts_cache[cache_key] = cached_gifts
+                                            except Exception as e:
+                                                import traceback
+                                                batch_fetch_debug['error'] = str(e)
+                                                batch_fetch_debug['error_type'] = type(e).__name__
+                                                batch_fetch_debug['error_traceback'] = traceback.format_exc()
+                        
+                        # Store batch fetch debug info for display
+                        st.session_state.batch_fetch_debug = batch_fetch_debug
                         
                         processed_df, exceptions_df, p2p_pending = transformer.transform(
                             df=df,
@@ -775,16 +816,63 @@ if check_password():
                         if exceptions_df is not None and len(exceptions_df) > 0:
                             with st.expander("View Exceptions"):
                                 st.dataframe(exceptions_df)
+                        
+                        # DEBUG SECTION - Show batch API fetch info and per-row lookups
+                        with st.expander("🔍 Debug Log - RE API Batch Fetch & Gift Lookups"):
+                            # Show batch fetch debug info
+                            st.subheader("Batch API Fetch Summary")
+                            if 'batch_fetch_debug' in st.session_state:
+                                bfd = st.session_state.batch_fetch_debug
                                 
-                        # DEBUG SECTION - Commented out for production
-                        # Show debug log for RE API calls (Gifts Last Month)
-                        if transformer.debug_log:
-                            with st.expander("🔍 Debug Log - Recurring Gift Lookups"):
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.write("**RE API Status:**")
+                                    st.write(f"- API Available: {bfd.get('re_api_available', 'N/A')}")
+                                    st.write(f"- API Authenticated: {bfd.get('re_api_authenticated', 'N/A')}")
+                                    st.write(f"- Has Recurring Records: {bfd.get('has_recurring_records', 'N/A')}")
+                                    st.write(f"- Recurring Record Count: {bfd.get('recurring_count', 'N/A')}")
+                                
+                                with col2:
+                                    st.write("**Date Range Calculation:**")
+                                    st.write(f"- Campaign Date Column Exists: {bfd.get('campaign_date_column_exists', 'N/A')}")
+                                    st.write(f"- Valid Dates Found: {bfd.get('valid_dates_count', 'N/A')}")
+                                    st.write(f"- EN Data Date Range: {bfd.get('en_date_range', 'N/A')}")
+                                    st.write(f"- Previous Month Range: {bfd.get('prev_month_date_range', 'N/A')}")
+                                
+                                st.write("**API Call Details:**")
+                                st.write(f"- Cache Key: {bfd.get('cache_key', 'N/A')}")
+                                st.write(f"- Used Cached Data: {bfd.get('used_cached', False)}")
+                                st.write(f"- API Call Made: {bfd.get('api_call_made', False)}")
+                                
+                                if bfd.get('api_call_made'):
+                                    st.write(f"- Gifts Fetched: {bfd.get('gifts_fetched', 'N/A')}")
+                                    st.write(f"- Unique Constituents: {bfd.get('unique_constituents', 'N/A')}")
+                                    
+                                    if bfd.get('api_call_result'):
+                                        st.write("**API Response Details:**")
+                                        st.json(bfd.get('api_call_result'))
+                                
+                                if bfd.get('used_cached'):
+                                    st.write(f"- Cached Constituents Count: {bfd.get('cached_constituents_count', 'N/A')}")
+                                
+                                if bfd.get('error'):
+                                    st.error(f"**API Error:** {bfd.get('error')}")
+                                    st.write(f"Error Type: {bfd.get('error_type', 'N/A')}")
+                                    if bfd.get('error_traceback'):
+                                        st.code(bfd.get('error_traceback'))
+                            else:
+                                st.warning("No batch fetch debug info available")
+                            
+                            st.divider()
+                            
+                            # Show per-row debug info
+                            st.subheader("Per-Row Gift Lookups")
+                            if transformer.debug_log:
                                 st.write(f"Total recurring gift records processed: {len(transformer.debug_log)}")
                                 debug_df = pd.DataFrame(transformer.debug_log)
                                 st.dataframe(debug_df)
                                 
-                                # Show first row's all column names to help debug
+                                # Show first recurring row's columns to help debug
                                 if 'Campaign Type' in df.columns:
                                     recurring_rows = df[df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])]
                                     if len(recurring_rows) > 0:
@@ -792,6 +880,8 @@ if check_password():
                                         first_row = recurring_rows.iloc[0]
                                         non_empty = {k: v for k, v in first_row.items() if pd.notna(v) and str(v).strip() != ''}
                                         st.json(non_empty)
+                            else:
+                                st.info("No recurring gift records to debug")
                     
                     except Exception as e:
                         st.error(f"Transformation error: {e}")
