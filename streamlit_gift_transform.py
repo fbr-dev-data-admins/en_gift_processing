@@ -341,6 +341,20 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
                 FormulaRule(formula=[formula], fill=yellow_fill)
             )
     
+    # Highlight blank City when Address AND ZIP both have data
+    if "City" in col_letters:
+        city_col = col_letters["City"]
+        addr_col = col_letters.get("Address", "")
+        zip_col = col_letters.get("ZIP", "")
+        
+        # Build formula: City is blank AND Address<>"" AND ZIP<>""
+        if addr_col and zip_col:
+            formula = f'AND({city_col}2="",{addr_col}2<>"",{zip_col}2<>"")'
+            ws_main.conditional_formatting.add(
+                f'{city_col}2:{city_col}{len(df)+1}',
+                FormulaRule(formula=[formula], fill=yellow_fill)
+            )
+    
     # Add exceptions sheet if there are exceptions
     if exceptions_df is not None and len(exceptions_df) > 0:
         ws_exceptions = wb.create_sheet("Exceptions")
@@ -674,15 +688,74 @@ if check_password():
                                 st.session_state.raw_df['Campaign Type'].isin(['FIM', 'PFIM'])
                             ].copy() if 'Campaign Type' in st.session_state.raw_df.columns else None
                         
+                        # Batch fetch RE gifts for the previous month's date range
+                        # This avoids per-row API calls which hit rate limits
+                        cached_gifts = {}
+                        cached_gifts_debug = {}
+                        
+                        re_api = st.session_state.re_api
+                        if re_api and re_api.is_authenticated():
+                            # Check if we have recurring gift records that need gift lookup
+                            has_recurring = False
+                            if 'Campaign Type' in df.columns:
+                                recurring_mask = df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])
+                                has_recurring = recurring_mask.any()
+                            
+                            if has_recurring:
+                                # Calculate the previous month's date range based on the EN data dates
+                                if 'Campaign Date' in df.columns:
+                                    # Parse campaign dates to find the date range
+                                    campaign_dates = pd.to_datetime(df['Campaign Date'], errors='coerce')
+                                    valid_dates = campaign_dates.dropna()
+                                    
+                                    if len(valid_dates) > 0:
+                                        min_date = valid_dates.min()
+                                        max_date = valid_dates.max()
+                                        
+                                        # Calculate previous month equivalent dates
+                                        prev_min_date = min_date - relativedelta(months=1)
+                                        prev_max_date = max_date - relativedelta(months=1)
+                                        
+                                        # Format for API
+                                        start_date_str = prev_min_date.strftime('%Y-%m-%d')
+                                        end_date_str = prev_max_date.strftime('%Y-%m-%d')
+                                        
+                                        st.info(f"📡 Fetching RE gifts from {start_date_str} to {end_date_str} for recurring gift verification...")
+                                        
+                                        # Check if we have cached gifts for this date range in session state
+                                        cache_key = f"{start_date_str}_{end_date_str}"
+                                        if 'gifts_cache' not in st.session_state:
+                                            st.session_state.gifts_cache = {}
+                                        
+                                        if cache_key in st.session_state.gifts_cache:
+                                            cached_gifts = st.session_state.gifts_cache[cache_key]
+                                            st.success(f"✅ Using cached gifts: {len(cached_gifts)} constituents")
+                                        else:
+                                            # Fetch gifts from RE API in batch
+                                            cached_gifts, cached_gifts_debug = re_api.get_gifts_for_date_range(
+                                                start_date=start_date_str,
+                                                end_date=end_date_str
+                                            )
+                                            
+                                            # Store in session state for potential re-runs
+                                            st.session_state.gifts_cache[cache_key] = cached_gifts
+                                            
+                                            if cached_gifts_debug.get('response_status') == 'success':
+                                                st.success(f"✅ Fetched {cached_gifts_debug.get('total_gifts_fetched', 0)} gifts for {len(cached_gifts)} constituents")
+                                            else:
+                                                st.warning(f"⚠️ Gift fetch issue: {cached_gifts_debug.get('error', 'Unknown error')}")
+                        
                         processed_df, exceptions_df, p2p_pending = transformer.transform(
                             df=df,
                             mapping_config=mapping_config,
                             p2p_config=p2p_config,
                             tribute_df=tribute_df,
-                            re_api=st.session_state.re_api
+                            re_api=st.session_state.re_api,
+                            cached_gifts=cached_gifts
                         )
                         
-                        # Save P2P config if there were any auto-updates during transformation
+                        # P2P config no longer auto-updated (API calls removed)
+                        # The following section is kept for compatibility but will rarely trigger
                         if transformer.p2p_config_updates:
                             save_config_with_github_sync(p2p_path, p2p_config, github_repo, github_token, "P2P config")
                             st.session_state.p2p_config = p2p_config  # Update session state
@@ -711,20 +784,20 @@ if check_password():
                                 
                         # DEBUG SECTION - Commented out for production
                         # Show debug log for RE API calls (Gifts Last Month)
-                        if transformer.debug_log:
-                            with st.expander("🔍 Debug Log - Recurring Gift Lookups"):
-                                st.write(f"Total recurring gift records processed: {len(transformer.debug_log)}")
-                                debug_df = pd.DataFrame(transformer.debug_log)
-                                st.dataframe(debug_df)
+                        # if transformer.debug_log:
+                        #     with st.expander("🔍 Debug Log - Recurring Gift Lookups"):
+                        #         st.write(f"Total recurring gift records processed: {len(transformer.debug_log)}")
+                        #         debug_df = pd.DataFrame(transformer.debug_log)
+                        #         st.dataframe(debug_df)
                                 
                                 # Show first row's all column names to help debug
-                                if 'Campaign Type' in df.columns:
-                                    recurring_rows = df[df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])]
-                                    if len(recurring_rows) > 0:
-                                        st.write("**First recurring row - all columns with values:**")
-                                        first_row = recurring_rows.iloc[0]
-                                        non_empty = {k: v for k, v in first_row.items() if pd.notna(v) and str(v).strip() != ''}
-                                        st.json(non_empty)
+                        #         if 'Campaign Type' in df.columns:
+                        #             recurring_rows = df[df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])]
+                        #             if len(recurring_rows) > 0:
+                        #                 st.write("**First recurring row - all columns with values:**")
+                        #                 first_row = recurring_rows.iloc[0]
+                        #                 non_empty = {k: v for k, v in first_row.items() if pd.notna(v) and str(v).strip() != ''}
+                        #                 st.json(non_empty)
                     
                     except Exception as e:
                         st.error(f"Transformation error: {e}")
