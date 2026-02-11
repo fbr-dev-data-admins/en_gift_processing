@@ -451,12 +451,16 @@ class RESkyAPI:
         """
         debug_info = {
             'endpoint': '/gift/v1/gifts',
+            'full_url': f"{self.API_BASE_URL}/gift/v1/gifts",
             'params': None,
             'response_status': None,
+            'http_status_code': None,
             'total_gifts_fetched': 0,
             'unique_constituents': 0,
             'pages_fetched': 0,
-            'error': None
+            'raw_response_sample': None,
+            'error': None,
+            'error_response_text': None
         }
         
         gifts_by_constituent = {}
@@ -475,17 +479,51 @@ class RESkyAPI:
         try:
             while total_fetched < limit:
                 params['offset'] = offset
+                debug_info['current_offset'] = offset
                 
-                result = self._make_request(
-                    'GET', 
-                    '/gift/v1/gifts',
-                    params=params
-                )
+                # Make request with detailed error capture
+                if not self.is_authenticated():
+                    debug_info['error'] = "Not authenticated - is_authenticated() returned False"
+                    debug_info['response_status'] = 'auth_error'
+                    return gifts_by_constituent, debug_info
+                
+                url = f"{self.API_BASE_URL}/gift/v1/gifts"
+                
+                try:
+                    response = requests.request(
+                        method='GET',
+                        url=url,
+                        headers=self._get_headers(),
+                        params=params
+                    )
+                    
+                    debug_info['http_status_code'] = response.status_code
+                    
+                    if response.status_code != 200:
+                        debug_info['error'] = f"HTTP {response.status_code}"
+                        debug_info['error_response_text'] = response.text[:1000] if response.text else None
+                        debug_info['response_status'] = 'http_error'
+                        return gifts_by_constituent, debug_info
+                    
+                    result = response.json() if response.text else {}
+                    
+                    # Capture sample of raw response for debugging
+                    if pages == 0:
+                        debug_info['raw_response_sample'] = str(result)[:500] if result else 'Empty response'
+                    
+                except requests.exceptions.RequestException as req_err:
+                    debug_info['error'] = f"Request exception: {str(req_err)}"
+                    debug_info['error_type'] = type(req_err).__name__
+                    debug_info['response_status'] = 'request_error'
+                    return gifts_by_constituent, debug_info
                 
                 pages += 1
                 gifts = result.get('value', []) if result else []
+                debug_info['first_page_count'] = len(gifts) if pages == 1 else debug_info.get('first_page_count')
                 
                 if not gifts:
+                    if pages == 1:
+                        debug_info['note'] = 'No gifts returned on first page - date range may have no gifts'
                     break
                 
                 for g in gifts:
@@ -536,8 +574,11 @@ class RESkyAPI:
             debug_info['pages_fetched'] = pages
             
         except Exception as e:
+            import traceback
             debug_info['response_status'] = 'error'
             debug_info['error'] = str(e)
+            debug_info['error_type'] = type(e).__name__
+            debug_info['error_traceback'] = traceback.format_exc()
         
         return gifts_by_constituent, debug_info
     
