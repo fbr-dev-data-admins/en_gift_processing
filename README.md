@@ -6,10 +6,30 @@ A Streamlit application for transforming Engaging Networks (EN) donation export 
 
 - **EN Data Export**: Fetch transaction data directly from Engaging Networks API
 - **Gift Transformation**: Comprehensive data transformation following business rules
-- **P2P Solicitor Matching**: Match peer-to-peer fundraiser pages to RE constituents
-- **RE Sky API Integration**: Lookup constituents, verify gifts, mark solicitors
+- **P2P Solicitor Matching**: Match peer-to-peer fundraiser pages to RE constituents (manual matching)
+- **RE Sky API Integration**: Batch gift lookup for recurring gift verification
 - **Excel Output**: Generate formatted Excel files with conditional formatting
 - **Configuration Management**: JSON-based mapping for appeals, funds, and P2P data
+
+## Recent Changes
+
+### Batch API Calls for Recurring Gifts
+Previously, the application made individual RE API calls for each recurring gift row to verify previous month's gifts. This caused rate limit issues with large batches. 
+
+**New approach:**
+- Single batch API call fetches all gifts for the previous month's date range
+- Results cached in session state (no redundant calls on re-run)
+- In-memory lookup by constituent ID during transformation
+- Reduces API calls from hundreds to just 1-10 paginated requests
+
+### P2P Matching Changes
+- RE API calls removed from automatic P2P solicitor matching
+- All unmatched PFTC records now go to the P2P Matching tab for manual entry
+- Reduces API usage and avoids rate limits
+
+### Excel Conditional Formatting
+- Added highlight for blank City cells when Address AND ZIP both have data
+- Existing highlights: blank Country with address data, Spouse First Name with numbers, "CHECK" in Gifts Last Month
 
 ## Project Structure
 
@@ -151,11 +171,11 @@ The application handles OAuth automatically:
 5. Paste into the application
 6. Tokens are saved and refreshed automatically
 
-### API Rate Limits
+### API Rate Limits & Batch Processing
 
 - **Standard Tier**: 10,000 calls/day
 - **Rate limiting**: 5 calls/second recommended
-- The application implements automatic retry with backoff
+- **Batch gift fetching**: The application now fetches all gifts for the previous month's date range in a single paginated request, then looks up individual constituents from the cached results. This dramatically reduces API calls.
 
 ### Common API Endpoints Used
 
@@ -163,7 +183,7 @@ The application handles OAuth automatically:
 |----------|---------|
 | `GET /constituent/v1/constituents` | Search constituents |
 | `GET /constituent/v1/constituents/{id}` | Get constituent details |
-| `GET /gift/v1/constituents/{id}/gifts` | Get constituent's gifts |
+| `GET /gift/v1/gifts` | Batch fetch gifts by date range |
 | `POST /constituent/v1/constituentcodes` | Add solicitor code |
 
 ---
@@ -256,7 +276,8 @@ For recurring gifts (FCR, FBR, PFCR, PFBR):
 - Region: Based on Branch
 
 **Existing recurring (dates don't match):**
-- Gifts Last Month: Lookup from RE or "CHECK"
+- Gifts Last Month: Lookup from cached RE gifts or "CHECK"
+- End-of-month handling: For gifts on the 28th-31st, checks multiple possible dates in the previous month to account for varying month lengths
 
 ---
 
@@ -272,7 +293,8 @@ For recurring gifts (FCR, FBR, PFCR, PFBR):
 
 - **401 Unauthorized**: Refresh tokens or re-authenticate
 - **403 Forbidden**: Check application scopes and environment connection
-- **429 Rate Limited**: Application implements automatic backoff
+- **429 Rate Limited**: The batch approach should prevent this; if it occurs, wait and retry
+- **No gifts found**: Check that the previous month's date range contains expected gifts
 
 ### Common Errors
 
@@ -285,6 +307,11 @@ For recurring gifts (FCR, FBR, PFCR, PFBR):
 
 3. **"P2P records pending matching"**
    - Complete matching in the P2P Matching tab before final export
+   - All P2P matching is now manual (no auto-match from RE API)
+
+4. **"No cached gifts available"**
+   - RE API may not be authenticated
+   - Check sidebar for RE API status
 
 ---
 
@@ -299,4 +326,4 @@ For issues related to:
 
 ## License
 
-Internal use only. © Your Organization
+Internal use only. © Food Bank of the Rockies
