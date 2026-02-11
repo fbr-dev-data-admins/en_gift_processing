@@ -431,6 +431,116 @@ class RESkyAPI:
         
         return gifts, debug_info
     
+    def get_gifts_for_date_range(
+        self, 
+        start_date: str,
+        end_date: str,
+        limit: int = 5000
+    ) -> Tuple[Dict[str, List[Dict[str, Any]]], Dict[str, Any]]:
+        """
+        Get all gifts in a date range, indexed by constituent ID for fast lookup.
+        
+        Args:
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+            limit: Maximum number of records to fetch (default 5000)
+            
+        Returns:
+            Tuple of (dict mapping constituent_id to list of gifts, debug_info dict)
+            Each gift has 'date' and 'amount' keys
+        """
+        debug_info = {
+            'endpoint': '/gift/v1/gifts',
+            'params': None,
+            'response_status': None,
+            'total_gifts_fetched': 0,
+            'unique_constituents': 0,
+            'pages_fetched': 0,
+            'error': None
+        }
+        
+        gifts_by_constituent = {}
+        offset = 0
+        page_limit = 500  # Max per API call
+        total_fetched = 0
+        pages = 0
+        
+        params = {
+            'start_gift_date': start_date,
+            'end_gift_date': end_date,
+            'limit': page_limit
+        }
+        debug_info['params'] = params.copy()
+        
+        try:
+            while total_fetched < limit:
+                params['offset'] = offset
+                
+                result = self._make_request(
+                    'GET', 
+                    '/gift/v1/gifts',
+                    params=params
+                )
+                
+                pages += 1
+                gifts = result.get('value', []) if result else []
+                
+                if not gifts:
+                    break
+                
+                for g in gifts:
+                    # Get constituent ID from gift
+                    constituent_id = g.get('constituent_id', '')
+                    if not constituent_id:
+                        continue
+                    
+                    # Clean the ID
+                    clean_id = str(constituent_id).strip()
+                    if clean_id.endswith('.0'):
+                        clean_id = clean_id[:-2]
+                    try:
+                        float_val = float(clean_id)
+                        if float_val == int(float_val):
+                            clean_id = str(int(float_val))
+                    except (ValueError, TypeError):
+                        pass
+                    
+                    # Skip soft credits
+                    gift_type = g.get('type', '')
+                    if gift_type and 'soft' in gift_type.lower():
+                        continue
+                    
+                    # Extract date and amount
+                    gift_date_str = g.get('date', '')[:10] if g.get('date') else ''
+                    gift_amount = g.get('amount', {}).get('value', 0) if g.get('amount') else 0
+                    
+                    if clean_id not in gifts_by_constituent:
+                        gifts_by_constituent[clean_id] = []
+                    
+                    gifts_by_constituent[clean_id].append({
+                        'date': gift_date_str,
+                        'amount': gift_amount
+                    })
+                
+                total_fetched += len(gifts)
+                
+                # Check if there are more results
+                if len(gifts) < page_limit:
+                    break
+                
+                offset += page_limit
+            
+            debug_info['response_status'] = 'success'
+            debug_info['total_gifts_fetched'] = total_fetched
+            debug_info['unique_constituents'] = len(gifts_by_constituent)
+            debug_info['pages_fetched'] = pages
+            
+        except Exception as e:
+            debug_info['response_status'] = 'error'
+            debug_info['error'] = str(e)
+        
+        return gifts_by_constituent, debug_info
+    
     def get_gift(self, gift_id: str) -> Optional[Dict[str, Any]]:
         """
         Get a specific gift by ID.
