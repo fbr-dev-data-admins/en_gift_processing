@@ -720,7 +720,7 @@ if check_password():
                                 recurring_mask = df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])
                                 has_recurring = recurring_mask.any()
                                 batch_fetch_debug['has_recurring_records'] = has_recurring
-                                batch_fetch_debug['recurring_count'] = recurring_mask.sum()
+                                batch_fetch_debug['recurring_count'] = int(recurring_mask.sum())
                             
                             if has_recurring:
                                 # Calculate the previous month's date range based on the EN data dates
@@ -752,14 +752,27 @@ if check_password():
                                         
                                         if 'gifts_cache' not in st.session_state:
                                             st.session_state.gifts_cache = {}
+                                        if 'gifts_cache_debug' not in st.session_state:
+                                            st.session_state.gifts_cache_debug = {}
                                         
-                                        if cache_key in st.session_state.gifts_cache:
+                                        # Only use cache if it has actual data (don't cache empty results)
+                                        if cache_key in st.session_state.gifts_cache and len(st.session_state.gifts_cache[cache_key]) > 0:
                                             cached_gifts = st.session_state.gifts_cache[cache_key]
                                             batch_fetch_debug['used_cached'] = True
                                             batch_fetch_debug['cached_constituents_count'] = len(cached_gifts)
+                                            # Include the original API debug info from when cache was populated
+                                            if cache_key in st.session_state.gifts_cache_debug:
+                                                batch_fetch_debug['original_api_call_result'] = st.session_state.gifts_cache_debug[cache_key]
                                         else:
                                             # Fetch gifts from RE API in batch
                                             batch_fetch_debug['api_call_made'] = True
+                                            batch_fetch_debug['api_request_url'] = f"{re_api.API_BASE_URL}/gift/v1/gifts"
+                                            batch_fetch_debug['api_request_params'] = {
+                                                'start_gift_date': start_date_str,
+                                                'end_gift_date': end_date_str,
+                                                'limit': 500,
+                                                'offset': 0
+                                            }
                                             try:
                                                 cached_gifts, cached_gifts_debug = re_api.get_gifts_for_date_range(
                                                     start_date=start_date_str,
@@ -769,8 +782,12 @@ if check_password():
                                                 batch_fetch_debug['gifts_fetched'] = cached_gifts_debug.get('total_gifts_fetched', 0)
                                                 batch_fetch_debug['unique_constituents'] = len(cached_gifts)
                                                 
-                                                # Store in session state for potential re-runs
-                                                st.session_state.gifts_cache[cache_key] = cached_gifts
+                                                # Only cache if we got results
+                                                if len(cached_gifts) > 0:
+                                                    st.session_state.gifts_cache[cache_key] = cached_gifts
+                                                    st.session_state.gifts_cache_debug[cache_key] = cached_gifts_debug
+                                                else:
+                                                    batch_fetch_debug['cache_note'] = 'Empty result NOT cached - will retry on next run'
                                             except Exception as e:
                                                 import traceback
                                                 batch_fetch_debug['error'] = str(e)
@@ -819,6 +836,17 @@ if check_password():
                         
                         # DEBUG SECTION - Show batch API fetch info and per-row lookups
                         with st.expander("🔍 Debug Log - RE API Batch Fetch & Gift Lookups"):
+                            # Clear cache button
+                            col_btn1, col_btn2 = st.columns([1, 3])
+                            with col_btn1:
+                                if st.button("🗑️ Clear Gift Cache"):
+                                    if 'gifts_cache' in st.session_state:
+                                        st.session_state.gifts_cache = {}
+                                    if 'gifts_cache_debug' in st.session_state:
+                                        st.session_state.gifts_cache_debug = {}
+                                    st.success("Cache cleared! Run transformation again to fetch fresh data.")
+                                    st.rerun()
+                            
                             # Show batch fetch debug info
                             st.subheader("Batch API Fetch Summary")
                             if 'batch_fetch_debug' in st.session_state:
@@ -839,21 +867,32 @@ if check_password():
                                     st.write(f"- EN Data Date Range: {bfd.get('en_date_range', 'N/A')}")
                                     st.write(f"- Previous Month Range: {bfd.get('prev_month_date_range', 'N/A')}")
                                 
+                                st.divider()
                                 st.write("**API Call Details:**")
-                                st.write(f"- Cache Key: {bfd.get('cache_key', 'N/A')}")
+                                st.write(f"- Cache Key: `{bfd.get('cache_key', 'N/A')}`")
                                 st.write(f"- Used Cached Data: {bfd.get('used_cached', False)}")
-                                st.write(f"- API Call Made: {bfd.get('api_call_made', False)}")
+                                st.write(f"- API Call Made This Run: {bfd.get('api_call_made', False)}")
+                                
+                                if bfd.get('cache_note'):
+                                    st.warning(bfd.get('cache_note'))
                                 
                                 if bfd.get('api_call_made'):
+                                    st.write("**API Request:**")
+                                    st.write(f"- URL: `{bfd.get('api_request_url', 'N/A')}`")
+                                    st.write(f"- Params: `{bfd.get('api_request_params', 'N/A')}`")
                                     st.write(f"- Gifts Fetched: {bfd.get('gifts_fetched', 'N/A')}")
                                     st.write(f"- Unique Constituents: {bfd.get('unique_constituents', 'N/A')}")
                                     
                                     if bfd.get('api_call_result'):
-                                        st.write("**API Response Details:**")
+                                        st.write("**Full API Response Details:**")
                                         st.json(bfd.get('api_call_result'))
                                 
                                 if bfd.get('used_cached'):
                                     st.write(f"- Cached Constituents Count: {bfd.get('cached_constituents_count', 'N/A')}")
+                                    st.info("ℹ️ Using cached data from a previous API call. Click 'Clear Gift Cache' above to force a fresh API call.")
+                                    if bfd.get('original_api_call_result'):
+                                        st.write("**Original API Call Details (when cache was populated):**")
+                                        st.json(bfd.get('original_api_call_result'))
                                 
                                 if bfd.get('error'):
                                     st.error(f"**API Error:** {bfd.get('error')}")
