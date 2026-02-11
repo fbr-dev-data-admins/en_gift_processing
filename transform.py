@@ -90,6 +90,8 @@ class GiftTransformer:
         self.p2p_pending = []
         self.debug_log = []  # For debugging RE API calls
         self.p2p_config_updates = {}  # Track P2P config updates made during transform
+        self.cached_gifts = {}  # Cache for gifts fetched from RE API
+        self.gifts_cache_debug = {}  # Debug info for cached gifts fetch
     
     def transform(
         self,
@@ -97,10 +99,19 @@ class GiftTransformer:
         mapping_config: dict,
         p2p_config: dict,
         tribute_df: Optional[pd.DataFrame] = None,
-        re_api=None
+        re_api=None,
+        cached_gifts: Optional[Dict[str, List[Dict]]] = None
     ) -> Tuple[pd.DataFrame, pd.DataFrame, List[dict]]:
         """
         Main transformation method
+        
+        Args:
+            df: Input dataframe from EN
+            mapping_config: Form mappings configuration
+            p2p_config: P2P solicitor configuration
+            tribute_df: Optional tribute records for gift reference
+            re_api: RE API client (used for batch gift fetching if cached_gifts not provided)
+            cached_gifts: Pre-fetched gifts indexed by constituent ID (avoids per-row API calls)
         
         Returns:
             Tuple of (processed_df, exceptions_df, p2p_pending_list)
@@ -109,6 +120,8 @@ class GiftTransformer:
         self.p2p_pending = []
         self.debug_log = []  # Reset debug log
         self.p2p_config_updates = {}  # Reset P2P config updates
+        self.cached_gifts = cached_gifts or {}  # Use provided cache or empty dict
+        self.gifts_cache_debug = {}
         
         # Create a copy to avoid modifying original
         df = df.copy()
@@ -538,7 +551,12 @@ class GiftTransformer:
             return pd.Series([''] * len(df), index=df.index)
     
     def _handle_pftc_record(self, row: pd.Series, p2p_config: dict, re_api, row_number: int = None) -> None:
-        """Handle PFTC (P2P page creator) records for solicitor matching"""
+        """Handle PFTC (P2P page creator) records for solicitor matching
+        
+        Note: No longer makes RE API calls for auto-matching. All PFTC records
+        that aren't already in P2P config will be added to pending list for
+        manual matching by the user.
+        """
         campaign_number = str(row.get('Campaign Number', ''))
         
         # Skip if already in P2P config
@@ -559,34 +577,11 @@ class GiftTransformer:
         campaign_data_10 = str(row.get('Campaign Data 10', ''))  # EN Campaign Name
         campaign_data_11 = str(row.get('Campaign Data 11', ''))  # Email
         
+        # No longer making RE API calls for P2P matching
+        # All unmatched records go to pending list for manual matching
         re_match = None
-        matched_on = None
         
-        if re_api and re_api.is_authenticated():
-            # Try System Record ID first
-            if system_record_id:
-                result = re_api.find_p2p_solicitor(system_record_id=system_record_id)
-                if result:
-                    re_match = result
-                    matched_on = 'System Record ID'
-            
-            # Try email if no match
-            if not re_match and campaign_data_11:
-                result = re_api.find_p2p_solicitor(email=campaign_data_11)
-                if result:
-                    re_match = result
-                    matched_on = 'Email (Campaign Data 11)'
-        
-        # If we found a match, update P2P config immediately
-        if re_match:
-            p2p_config[campaign_number] = {
-                'EN Campaign Name': campaign_data_10,
-                'Solicitor': re_match.get('id', '')
-            }
-            # Track this update so calling code can save the config
-            self.p2p_config_updates[campaign_number] = p2p_config[campaign_number]
-        
-        # Add to pending list for user review (even if matched, so user can verify)
+        # Add to pending list for manual matching
         self.p2p_pending.append({
             'row_number': row_number,
             'campaign_number': campaign_number,
@@ -827,19 +822,20 @@ class GiftTransformer:
             channel = ''
             gifts_last_month = 'CHECK'  # Default to CHECK
             
-            # Try to call RE API if available and we have a RE System Record ID
-            can_call_api = (
-                re_api and 
-                re_api.is_authenticated() and 
+            # Look up gifts from cached data (pre-fetched in batch)
+            can_lookup = (
+                self.cached_gifts and 
                 re_system_id and 
                 re_system_id != 'nan' and 
                 campaign_date is not None
             )
             
-            debug_entry['Can Call API'] = can_call_api
+            debug_entry['Can Lookup Cached'] = can_lookup
+            debug_entry['Cached Gifts Available'] = bool(self.cached_gifts)
+            debug_entry['Cached Constituents Count'] = len(self.cached_gifts) if self.cached_gifts else 0
             
-            if can_call_api:
-                debug_entry['RE API Called'] = True
+            if can_lookup:
+                debug_entry['Using Cached Gifts'] = True
                 try:
                     # Calculate the day to look for in previous month
                     gift_day = campaign_date.day
@@ -863,38 +859,27 @@ class GiftTransformer:
                         days_to_check = list(set([min(gift_day, days_in_prev_month), 28, 29, 30, 31]))
                         days_to_check = [d for d in days_to_check if d <= days_in_prev_month]
                     
+                    target_dates = [f"{prev_year}-{prev_month:02d}-{d:02d}" for d in days_to_check]
+                    
                     debug_entry['Gift Day'] = gift_day
                     debug_entry['Days to Check'] = days_to_check
                     debug_entry['Previous Month/Year'] = f"{prev_month}/{prev_year}"
                     debug_entry['Days in Prev Month'] = days_in_prev_month
-                    debug_entry['Target Dates'] = [f"{prev_year}-{prev_month:02d}-{d:02d}" for d in days_to_check]
+                    debug_entry['Target Dates'] = target_dates
                     
-                    # Call RE API to get gifts
-                    gifts_found, api_debug = re_api.get_constituent_gifts(
-                        constituent_id=re_system_id,
-                        year=prev_year,
-                        month=prev_month,
-                        days=days_to_check
-                    )
+                    # Look up gifts from cache
+                    constituent_gifts = self.cached_gifts.get(re_system_id, [])
+                    debug_entry['Constituent Found in Cache'] = re_system_id in self.cached_gifts
+                    debug_entry['Total Gifts for Constituent'] = len(constituent_gifts)
                     
-                    # Add detailed API debug info
-                    debug_entry['API Call Made'] = True
-                    debug_entry['API Endpoint'] = api_debug.get('endpoint', 'N/A')
-                    debug_entry['API Params'] = api_debug.get('params', {})
-                    debug_entry['API Response Status'] = api_debug.get('response_status', 'N/A')
-                    debug_entry['API Raw Response Length'] = api_debug.get('response_length', 'N/A')
-                    debug_entry['API Total Gifts Count'] = api_debug.get('gifts_count', 0)
-                    debug_entry['API Filtered Count'] = api_debug.get('filtered_count', 'N/A')
-                    debug_entry['API Filter Reason'] = api_debug.get('filter_reason', 'N/A')
+                    # Filter to target dates
+                    gifts_found = [
+                        g for g in constituent_gifts 
+                        if g.get('date', '') in target_dates
+                    ]
                     
-                    if api_debug.get('error'):
-                        debug_entry['API Error'] = api_debug.get('error')
-                        debug_entry['API Error Type'] = type(api_debug.get('error')).__name__
-                    
-                    if api_debug.get('raw_response_sample'):
-                        debug_entry['API Raw Response Sample'] = api_debug.get('raw_response_sample')
-                    
-                    debug_entry['API Gifts Found Object'] = str(gifts_found)[:200] if gifts_found else 'None/Empty'
+                    debug_entry['Filtered Gifts Count'] = len(gifts_found)
+                    debug_entry['Gifts Found Object'] = str(gifts_found)[:200] if gifts_found else 'None/Empty'
                     
                     if gifts_found and len(gifts_found) > 0:
                         # Get current transaction gift amount for comparison
@@ -930,31 +915,27 @@ class GiftTransformer:
                         debug_entry['Formatted Gift Strings'] = gift_strings
                     else:
                         gifts_last_month = 'CHECK'
-                        debug_entry['Gifts Last Month Result'] = '⚠️ No gifts found - CHECK'
-                        debug_entry['Gifts Found Type'] = type(gifts_found).__name__
-                        debug_entry['Gifts Found Value'] = str(gifts_found)
+                        debug_entry['Gifts Last Month Result'] = '⚠️ No gifts found in cache for target dates - CHECK'
                         
                 except Exception as e:
                     import traceback
-                    debug_entry['API Exception'] = str(e)
-                    debug_entry['API Exception Type'] = type(e).__name__
-                    debug_entry['API Traceback'] = traceback.format_exc()
-                    debug_entry['Gifts Last Month Result'] = f'❌ API Error: {str(e)[:100]}'
+                    debug_entry['Cache Lookup Exception'] = str(e)
+                    debug_entry['Cache Lookup Exception Type'] = type(e).__name__
+                    debug_entry['Cache Lookup Traceback'] = traceback.format_exc()
+                    debug_entry['Gifts Last Month Result'] = f'❌ Cache Lookup Error: {str(e)[:100]}'
                     gifts_last_month = 'CHECK'
             else:
-                # Log detailed reason why we didn't call the API
+                # Log detailed reason why we couldn't look up
                 reasons = []
-                if not re_api:
-                    reasons.append('No RE API configured')
-                if re_api and not re_api.is_authenticated():
-                    reasons.append('RE API not authenticated')
+                if not self.cached_gifts:
+                    reasons.append('No cached gifts available (RE API batch fetch may have failed or not been run)')
                 if not re_system_id or re_system_id == 'nan':
                     reasons.append(f'No RE System Record ID (value: "{re_system_id}")')
                 if campaign_date is None:
                     reasons.append(f'Campaign Date parse failed (raw: "{campaign_date_str}")')
                 
-                debug_entry['API Not Called Reasons'] = reasons
-                debug_entry['Gifts Last Month Result'] = f'⚠️ Cannot call API: {"; ".join(reasons)}'
+                debug_entry['Lookup Not Possible Reasons'] = reasons
+                debug_entry['Gifts Last Month Result'] = f'⚠️ Cannot lookup: {"; ".join(reasons)}'
         
         self.debug_log.append(debug_entry)
         
