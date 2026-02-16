@@ -128,7 +128,7 @@
     "Solicitor": "91520"
   },
   "17043": {
-    "EN Campaign Name": "DCSD Inverness Campus",
+    "EN Campaign Name": "DCSD Iverness Campus",
     "Solicitor": "91520"
   },
   "17110": {
@@ -238,10 +238,6 @@
     "EN Campaign Name": "DCSD West Support",
     "Solicitor": "91520"
   },
-  "17043": {
-    "EN Campaign Name": "DCSD Iverness Campus",
-    "Solicitor": "91520"
-  },
   "17026": {
     "EN Campaign Name": "Brewing Up PRIDE; Serving Up Hope",
     "Solicitor": "60922"
@@ -257,5 +253,9 @@
   "17109": {
     "EN Campaign Name": "Parker Transportation",
     "Solicitor": "26-38639"
+  },
+  "17168": {
+    "EN Campaign Name": "S. A. Miro, Inc.",
+    "Solicitor": "26-40160"
   }
 }
