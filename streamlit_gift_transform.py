@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
+import re
 import os
 import requests
 from datetime import datetime, timedelta
@@ -72,10 +73,13 @@ def check_password():
 
 # ---------- HELPER FUNCTIONS ----------
 def load_json_config(filepath: str) -> dict:
-    """Load JSON configuration file"""
+    """Load JSON configuration file, tolerating trailing commas (JSON5-style)"""
     if os.path.exists(filepath):
         with open(filepath, 'r') as f:
-            return json.load(f)
+            raw = f.read()
+        # Strip trailing commas before closing braces/brackets
+        raw = re.sub(r',\s*([}\]])', r'\1', raw)
+        return json.loads(raw)
     return {}
 
 
@@ -314,14 +318,14 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
                 FormulaRule(formula=[f'${ki_letter}2="O"'], fill=orange_fill)
             )
     
-    # Highlight Constituent ID if it contains "~" (custom note appended)
+    # Highlight Constituent ID if it contains "%" (custom note appended)
     if "Constituent ID" in col_letters:
         custom_note_fill = PatternFill(start_color="92CDDC", end_color="92CDDC", fill_type="solid")
         col_letter = col_letters["Constituent ID"]
         ws_main.conditional_formatting.add(
             f'{col_letter}2:{col_letter}{len(df)+1}',
             FormulaRule(
-                formula=[f'AND({col_letter}2<>"",ISNUMBER(SEARCH("~",{col_letter}2)))'],
+                formula=[f'AND({col_letter}2<>"",ISNUMBER(SEARCH("%",{col_letter}2)))'],
                 fill=custom_note_fill
             )
         )
@@ -451,6 +455,7 @@ if check_password():
     # Load configurations
     mapping_path = "config/mapping.json"
     p2p_path = "config/P2P.json"
+    custom_notes_path = "config/custom_notes.json"
     
     # Check for GitHub repo configuration
     github_repo = st.secrets.get("github", {}).get("config_repo", "")
@@ -461,12 +466,15 @@ if check_password():
         if 'mapping_config' not in st.session_state or st.sidebar.button("🔄 Reload GitHub Configs"):
             st.session_state.mapping_config = load_config_from_github(github_repo, "config/mapping.json")
             st.session_state.p2p_config = load_config_from_github(github_repo, "config/P2P.json")
+            st.session_state.custom_notes_config = load_config_from_github(github_repo, "config/custom_notes.json")
         mapping_config = st.session_state.get('mapping_config', {})
         p2p_config = st.session_state.get('p2p_config', {})
+        custom_notes_config = st.session_state.get('custom_notes_config', {})
     else:
         # Load from local files
         mapping_config = load_json_config(mapping_path)
         p2p_config = load_json_config(p2p_path)
+        custom_notes_config = load_json_config(custom_notes_path)
     
     # Sidebar for configuration
     with st.sidebar:
@@ -815,7 +823,8 @@ if check_password():
                             p2p_config=p2p_config,
                             tribute_df=tribute_df,
                             re_api=st.session_state.re_api,
-                            cached_gifts=cached_gifts
+                            cached_gifts=cached_gifts,
+                            custom_notes_config=custom_notes_config
                         )
                         
                         # P2P config no longer auto-updated (API calls removed)
