@@ -314,6 +314,18 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
                 FormulaRule(formula=[f'${ki_letter}2="O"'], fill=orange_fill)
             )
     
+    # Highlight Constituent ID if it contains " ~ " (custom note appended)
+    if "Constituent ID" in col_letters:
+        custom_note_fill = PatternFill(start_color="92CDDC", end_color="92CDDC", fill_type="solid")
+        col_letter = col_letters["Constituent ID"]
+        ws_main.conditional_formatting.add(
+            f'{col_letter}2:{col_letter}{len(df)+1}',
+            FormulaRule(
+                formula=[f'ISNUMBER(SEARCH("~",{col_letter}2))'],
+                fill=custom_note_fill
+            )
+        )
+    
     # Highlight blank Country when any address field has data
     if "Country" in col_letters:
         country_col = col_letters["Country"]
