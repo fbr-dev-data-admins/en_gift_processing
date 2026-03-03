@@ -90,7 +90,7 @@ class GiftTransformer:
     def __init__(self):
         self.exceptions = []
         self.p2p_pending = []
-        self.debug_log = []  # For debugging RE API calls
+        # self.debug_log = []  # For debugging RE API calls
         self.p2p_config_updates = {}  # Track P2P config updates made during transform
         self.cached_gifts = {}  # Cache for gifts fetched from RE API
         self.gifts_cache_debug = {}  # Debug info for cached gifts fetch
@@ -135,7 +135,7 @@ class GiftTransformer:
         """
         self.exceptions = []
         self.p2p_pending = []
-        self.debug_log = []  # Reset debug log
+        # self.debug_log = []  # Reset debug log
         self.p2p_config_updates = {}  # Reset P2P config updates
         self.cached_gifts = cached_gifts or {}  # Use provided cache or empty dict
         self.gifts_cache_debug = {}
@@ -814,21 +814,21 @@ class GiftTransformer:
                 break
         
         # Initialize debug entry
-        debug_entry = {
-            'EN Transaction ID': en_txn_id,
-            'Campaign Type': campaign_type,
-            'Campaign Date (raw)': campaign_date_str,
-            'Campaign Data 16 (raw)': data_16_str,
-            'Parsed Campaign Date': str(campaign_date) if campaign_date else 'PARSE FAILED',
-            'Parsed Data 16': str(data_16_date) if data_16_date else 'PARSE FAILED',
-            'Is New Recurring': is_new_recurring,
-            'RE System Record ID': re_system_id if re_system_id else '(empty)',
-            'RE ID Column Found': re_id_col_found,
-            'RE API Available': bool(re_api),
-            'RE API Authenticated': re_api.is_authenticated() if re_api else False,
-            'RE API Called': False,
-            'Gifts Last Month Result': ''
-        }
+        # debug_entry = {
+        #     'EN Transaction ID': en_txn_id,
+        #     'Campaign Type': campaign_type,
+        #     'Campaign Date (raw)': campaign_date_str,
+        #     'Campaign Data 16 (raw)': data_16_str,
+        #     'Parsed Campaign Date': str(campaign_date) if campaign_date else 'PARSE FAILED',
+        #     'Parsed Data 16': str(data_16_date) if data_16_date else 'PARSE FAILED',
+        #     'Is New Recurring': is_new_recurring,
+        #     'RE System Record ID': re_system_id if re_system_id else '(empty)',
+        #     'RE ID Column Found': re_id_col_found,
+        #     'RE API Available': bool(re_api),
+        #     'RE API Authenticated': re_api.is_authenticated() if re_api else False,
+        #     'RE API Called': False,
+        #     'Gifts Last Month Result': ''
+        # }
         
         if is_new_recurring and campaign_date is not None:
             # New recurring gift - populate all monthly donor fields
@@ -839,7 +839,7 @@ class GiftTransformer:
             statement_type = 'Emailed'
             channel = 'Digital - Recurring'
             gifts_last_month = ''
-            debug_entry['Gifts Last Month Result'] = '(New recurring - no lookup needed)'
+            # debug_entry['Gifts Last Month Result'] = '(New recurring - no lookup needed)'
         else:
             # Existing recurring gift - need to look up previous month's gifts
             status = ''
@@ -858,12 +858,12 @@ class GiftTransformer:
                 campaign_date is not None
             )
             
-            debug_entry['Can Lookup Cached'] = can_lookup
-            debug_entry['Cached Gifts Available'] = bool(self.cached_gifts)
-            debug_entry['Cached Constituents Count'] = len(self.cached_gifts) if self.cached_gifts else 0
+            # debug_entry['Can Lookup Cached'] = can_lookup
+            # debug_entry['Cached Gifts Available'] = bool(self.cached_gifts)
+            # debug_entry['Cached Constituents Count'] = len(self.cached_gifts) if self.cached_gifts else 0
             
             if can_lookup:
-                debug_entry['Using Cached Gifts'] = True
+                # debug_entry['Using Cached Gifts'] = True
                 try:
                     # Calculate the day to look for in previous month
                     gift_day = campaign_date.day
@@ -889,16 +889,16 @@ class GiftTransformer:
                     
                     target_dates = [f"{prev_year}-{prev_month:02d}-{d:02d}" for d in days_to_check]
                     
-                    debug_entry['Gift Day'] = gift_day
-                    debug_entry['Days to Check'] = days_to_check
-                    debug_entry['Previous Month/Year'] = f"{prev_month}/{prev_year}"
-                    debug_entry['Days in Prev Month'] = days_in_prev_month
-                    debug_entry['Target Dates'] = target_dates
+                    # debug_entry['Gift Day'] = gift_day
+                    # debug_entry['Days to Check'] = days_to_check
+                    # debug_entry['Previous Month/Year'] = f"{prev_month}/{prev_year}"
+                    # debug_entry['Days in Prev Month'] = days_in_prev_month
+                    # debug_entry['Target Dates'] = target_dates
                     
                     # Look up gifts from cache
                     constituent_gifts = self.cached_gifts.get(re_system_id, [])
-                    debug_entry['Constituent Found in Cache'] = re_system_id in self.cached_gifts
-                    debug_entry['Total Gifts for Constituent'] = len(constituent_gifts)
+                    # debug_entry['Constituent Found in Cache'] = re_system_id in self.cached_gifts
+                    # debug_entry['Total Gifts for Constituent'] = len(constituent_gifts)
                     
                     # Filter to target dates
                     gifts_found = [
@@ -906,8 +906,8 @@ class GiftTransformer:
                         if g.get('date', '') in target_dates
                     ]
                     
-                    debug_entry['Filtered Gifts Count'] = len(gifts_found)
-                    debug_entry['Gifts Found Object'] = str(gifts_found)[:200] if gifts_found else 'None/Empty'
+                    # debug_entry['Filtered Gifts Count'] = len(gifts_found)
+                    # debug_entry['Gifts Found Object'] = str(gifts_found)[:200] if gifts_found else 'None/Empty'
                     
                     if gifts_found and len(gifts_found) > 0:
                         # Get current transaction gift amount for comparison
@@ -939,18 +939,18 @@ class GiftTransformer:
                             gift_strings.append(f"{gift_date} - ${gift_amount}{amount_check}")
                         
                         gifts_last_month = '\n'.join(gift_strings)
-                        debug_entry['Gifts Last Month Result'] = f"✅ Found {len(gifts_found)} gifts"
-                        debug_entry['Formatted Gift Strings'] = gift_strings
+                        # debug_entry['Gifts Last Month Result'] = f"✅ Found {len(gifts_found)} gifts"
+                        # debug_entry['Formatted Gift Strings'] = gift_strings
                     else:
                         gifts_last_month = 'CHECK'
-                        debug_entry['Gifts Last Month Result'] = '⚠️ No gifts found in cache for target dates - CHECK'
+                        # debug_entry['Gifts Last Month Result'] = '⚠️ No gifts found in cache for target dates - CHECK'
                         
                 except Exception as e:
                     import traceback
-                    debug_entry['Cache Lookup Exception'] = str(e)
-                    debug_entry['Cache Lookup Exception Type'] = type(e).__name__
-                    debug_entry['Cache Lookup Traceback'] = traceback.format_exc()
-                    debug_entry['Gifts Last Month Result'] = f'❌ Cache Lookup Error: {str(e)[:100]}'
+                    # debug_entry['Cache Lookup Exception'] = str(e)
+                    # debug_entry['Cache Lookup Exception Type'] = type(e).__name__
+                    # debug_entry['Cache Lookup Traceback'] = traceback.format_exc()
+                    # debug_entry['Gifts Last Month Result'] = f'❌ Cache Lookup Error: {str(e)[:100]}'
                     gifts_last_month = 'CHECK'
             else:
                 # Log detailed reason why we couldn't look up
@@ -962,10 +962,10 @@ class GiftTransformer:
                 if campaign_date is None:
                     reasons.append(f'Campaign Date parse failed (raw: "{campaign_date_str}")')
                 
-                debug_entry['Lookup Not Possible Reasons'] = reasons
-                debug_entry['Gifts Last Month Result'] = f'⚠️ Cannot lookup: {"; ".join(reasons)}'
+                # debug_entry['Lookup Not Possible Reasons'] = reasons
+                # debug_entry['Gifts Last Month Result'] = f'⚠️ Cannot lookup: {"; ".join(reasons)}'
         
-        self.debug_log.append(debug_entry)
+        # self.debug_log.append(debug_entry)
         
         return (status, status_date, anniversary_desc, anniversary_date, 
                 statement_type, channel, payment_method, region, gifts_last_month)
