@@ -87,6 +87,22 @@ class GiftTransformer:
         
         return val_str
     
+    def _load_custom_notes(self) -> dict:
+        """Load custom notes config from file, handling trailing-comma JSON."""
+        config_path = os.path.join(os.path.dirname(__file__), 'config', 'custom_notes.json')
+        if not os.path.exists(config_path):
+            return {}
+        try:
+            with open(config_path, 'r') as f:
+                raw = f.read()
+            # Strip trailing commas before closing braces/brackets (common JSON5-style issue)
+            raw = re.sub(r',\s*([}\]])', r'\1', raw)
+            notes = json.loads(raw)
+            # Normalize keys to lowercase for case-insensitive matching
+            return {k.lower().strip(): v for k, v in notes.items()}
+        except Exception:
+            return {}
+
     def __init__(self):
         self.exceptions = []
         self.p2p_pending = []
@@ -94,21 +110,6 @@ class GiftTransformer:
         self.p2p_config_updates = {}  # Track P2P config updates made during transform
         self.cached_gifts = {}  # Cache for gifts fetched from RE API
         self.gifts_cache_debug = {}  # Debug info for cached gifts fetch
-        
-        # Load custom notes config (email -> custom note lookup)
-        self.custom_notes = {}
-        config_path = os.path.join(os.path.dirname(__file__), 'config', 'custom_notes.json')
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, 'r') as f:
-                    raw = f.read()
-                # Strip trailing commas before closing braces/brackets (common JSON5-style issue)
-                raw = re.sub(r',\s*([}\]])', r'\1', raw)
-                self.custom_notes = json.loads(raw)
-                # Normalize keys to lowercase for case-insensitive matching
-                self.custom_notes = {k.lower().strip(): v for k, v in self.custom_notes.items()}
-            except Exception:
-                self.custom_notes = {}
     
     def transform(
         self,
@@ -139,6 +140,9 @@ class GiftTransformer:
         self.p2p_config_updates = {}  # Reset P2P config updates
         self.cached_gifts = cached_gifts or {}  # Use provided cache or empty dict
         self.gifts_cache_debug = {}
+        
+        # Reload custom notes fresh on every transform (avoids stale session state)
+        self.custom_notes = self._load_custom_notes()
         
         # Create a copy to avoid modifying original
         df = df.copy()
