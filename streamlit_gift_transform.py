@@ -828,7 +828,7 @@ if check_password():
                         st.session_state.processed_df = processed_df
                         st.session_state.exceptions_df = exceptions_df
                         st.session_state.p2p_pending = p2p_pending
-                        st.session_state.debug_log = transformer.debug_log  # Store debug log
+                        # st.session_state.debug_log = transformer.debug_log  # Store debug log
                         
                         st.success(f"✅ Transformation complete!")
                         
@@ -846,93 +846,94 @@ if check_password():
                             with st.expander("View Exceptions"):
                                 st.dataframe(exceptions_df)
                         
-                        # DEBUG SECTION - Show batch API fetch info and per-row lookups
-                        with st.expander("🔍 Debug Log - RE API Batch Fetch & Gift Lookups"):
-                            # Clear cache button
-                            col_btn1, col_btn2 = st.columns([1, 3])
-                            with col_btn1:
-                                if st.button("🗑️ Clear Gift Cache"):
-                                    if 'gifts_cache' in st.session_state:
-                                        st.session_state.gifts_cache = {}
-                                    if 'gifts_cache_debug' in st.session_state:
-                                        st.session_state.gifts_cache_debug = {}
-                                    st.success("Cache cleared! Run transformation again to fetch fresh data.")
-                                    st.rerun()
+#                         # DEBUG SECTION - Show batch API fetch info and per-row lookups
+#                         with st.expander("🔍 Debug Log - RE API Batch Fetch & Gift Lookups"):
+#                             # Clear cache button
+#                             col_btn1, col_btn2 = st.columns([1, 3])
+#                             with col_btn1:
+#                                 if st.button("🗑️ Clear Gift Cache"):
+#                                     if 'gifts_cache' in st.session_state:
+#                                         st.session_state.gifts_cache = {}
+#                                     if 'gifts_cache_debug' in st.session_state:
+#                                         st.session_state.gifts_cache_debug = {}
+#                                     st.success("Cache cleared! Run transformation again to fetch fresh data.")
+#                                     st.rerun()
                             
-                            # Show batch fetch debug info
-                            st.subheader("Batch API Fetch Summary")
-                            if 'batch_fetch_debug' in st.session_state:
-                                bfd = st.session_state.batch_fetch_debug
+#                             # Show batch fetch debug info
+#                             st.subheader("Batch API Fetch Summary")
+#                             if 'batch_fetch_debug' in st.session_state:
+#                                 bfd = st.session_state.batch_fetch_debug
                                 
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    st.write("**RE API Status:**")
-                                    st.write(f"- API Available: {bfd.get('re_api_available', 'N/A')}")
-                                    st.write(f"- API Authenticated: {bfd.get('re_api_authenticated', 'N/A')}")
-                                    st.write(f"- Has Recurring Records: {bfd.get('has_recurring_records', 'N/A')}")
-                                    st.write(f"- Recurring Record Count: {bfd.get('recurring_count', 'N/A')}")
+#                                 col1, col2 = st.columns(2)
+#                                 with col1:
+#                                     st.write("**RE API Status:**")
+#                                     st.write(f"- API Available: {bfd.get('re_api_available', 'N/A')}")
+#                                     st.write(f"- API Authenticated: {bfd.get('re_api_authenticated', 'N/A')}")
+#                                     st.write(f"- Has Recurring Records: {bfd.get('has_recurring_records', 'N/A')}")
+#                                     st.write(f"- Recurring Record Count: {bfd.get('recurring_count', 'N/A')}")
                                 
-                                with col2:
-                                    st.write("**Date Range Calculation:**")
-                                    st.write(f"- Campaign Date Column Exists: {bfd.get('campaign_date_column_exists', 'N/A')}")
-                                    st.write(f"- Valid Dates Found: {bfd.get('valid_dates_count', 'N/A')}")
-                                    st.write(f"- EN Data Date Range: {bfd.get('en_date_range', 'N/A')}")
-                                    st.write(f"- Previous Month Range: {bfd.get('prev_month_date_range', 'N/A')}")
+#                                 with col2:
+#                                     st.write("**Date Range Calculation:**")
+#                                     st.write(f"- Campaign Date Column Exists: {bfd.get('campaign_date_column_exists', 'N/A')}")
+#                                     st.write(f"- Valid Dates Found: {bfd.get('valid_dates_count', 'N/A')}")
+#                                     st.write(f"- EN Data Date Range: {bfd.get('en_date_range', 'N/A')}")
+#                                     st.write(f"- Previous Month Range: {bfd.get('prev_month_date_range', 'N/A')}")
                                 
-                                st.divider()
-                                st.write("**API Call Details:**")
-                                st.write(f"- Cache Key: `{bfd.get('cache_key', 'N/A')}`")
-                                st.write(f"- Used Cached Data: {bfd.get('used_cached', False)}")
-                                st.write(f"- API Call Made This Run: {bfd.get('api_call_made', False)}")
+#                                 st.divider()
+#                                 st.write("**API Call Details:**")
+#                                 st.write(f"- Cache Key: `{bfd.get('cache_key', 'N/A')}`")
+#                                 st.write(f"- Used Cached Data: {bfd.get('used_cached', False)}")
+#                                 st.write(f"- API Call Made This Run: {bfd.get('api_call_made', False)}")
                                 
-                                if bfd.get('cache_note'):
-                                    st.warning(bfd.get('cache_note'))
+#                                 if bfd.get('cache_note'):
+#                                     st.warning(bfd.get('cache_note'))
                                 
-                                if bfd.get('api_call_made'):
-                                    st.write("**API Request:**")
-                                    st.write(f"- URL: `{bfd.get('api_request_url', 'N/A')}`")
-                                    st.write(f"- Params: `{bfd.get('api_request_params', 'N/A')}`")
-                                    st.write(f"- Gifts Fetched: {bfd.get('gifts_fetched', 'N/A')}")
-                                    st.write(f"- Unique Constituents: {bfd.get('unique_constituents', 'N/A')}")
+#                                 if bfd.get('api_call_made'):
+#                                     st.write("**API Request:**")
+#                                     st.write(f"- URL: `{bfd.get('api_request_url', 'N/A')}`")
+#                                     st.write(f"- Params: `{bfd.get('api_request_params', 'N/A')}`")
+#                                     st.write(f"- Gifts Fetched: {bfd.get('gifts_fetched', 'N/A')}")
+#                                     st.write(f"- Unique Constituents: {bfd.get('unique_constituents', 'N/A')}")
                                     
-                                    if bfd.get('api_call_result'):
-                                        st.write("**Full API Response Details:**")
-                                        st.json(bfd.get('api_call_result'))
+#                                     if bfd.get('api_call_result'):
+#                                         st.write("**Full API Response Details:**")
+#                                         st.json(bfd.get('api_call_result'))
                                 
-                                if bfd.get('used_cached'):
-                                    st.write(f"- Cached Constituents Count: {bfd.get('cached_constituents_count', 'N/A')}")
-                                    st.info("ℹ️ Using cached data from a previous API call. Click 'Clear Gift Cache' above to force a fresh API call.")
-                                    if bfd.get('original_api_call_result'):
-                                        st.write("**Original API Call Details (when cache was populated):**")
-                                        st.json(bfd.get('original_api_call_result'))
+#                                 if bfd.get('used_cached'):
+#                                     st.write(f"- Cached Constituents Count: {bfd.get('cached_constituents_count', 'N/A')}")
+#                                     st.info("ℹ️ Using cached data from a previous API call. Click 'Clear Gift Cache' above to force a fresh API call.")
+#                                     if bfd.get('original_api_call_result'):
+#                                         st.write("**Original API Call Details (when cache was populated):**")
+#                                         st.json(bfd.get('original_api_call_result'))
                                 
-                                if bfd.get('error'):
-                                    st.error(f"**API Error:** {bfd.get('error')}")
-                                    st.write(f"Error Type: {bfd.get('error_type', 'N/A')}")
-                                    if bfd.get('error_traceback'):
-                                        st.code(bfd.get('error_traceback'))
-                            else:
-                                st.warning("No batch fetch debug info available")
+#                                 if bfd.get('error'):
+#                                     st.error(f"**API Error:** {bfd.get('error')}")
+#                                     st.write(f"Error Type: {bfd.get('error_type', 'N/A')}")
+#                                     if bfd.get('error_traceback'):
+#                                         st.code(bfd.get('error_traceback'))
+#                             else:
+#                                 st.warning("No batch fetch debug info available")
                             
-                            st.divider()
+#                             st.divider()
                             
-                            # Show per-row debug info
-                            st.subheader("Per-Row Gift Lookups")
-                            if transformer.debug_log:
-                                st.write(f"Total recurring gift records processed: {len(transformer.debug_log)}")
-                                debug_df = pd.DataFrame(transformer.debug_log)
-                                st.dataframe(debug_df)
-                                
-                                # Show first recurring row's columns to help debug
-                                if 'Campaign Type' in df.columns:
-                                    recurring_rows = df[df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])]
-                                    if len(recurring_rows) > 0:
-                                        st.write("**First recurring row - all columns with values:**")
-                                        first_row = recurring_rows.iloc[0]
-                                        non_empty = {k: v for k, v in first_row.items() if pd.notna(v) and str(v).strip() != ''}
-                                        st.json(non_empty)
-                            else:
-                                st.info("No recurring gift records to debug")
+#                             # Show per-row debug info
+#                             st.subheader("Per-Row Gift Lookups")
+#                             # if transformer.debug_log:
+#                             #     st.write(f"Total recurring gift records processed: {len(transformer.debug_log)}")
+#                             #     debug_df = pd.DataFrame(transformer.debug_log)
+#                             #     st.dataframe(debug_df)
+#                             #     
+#                             #     # Show first recurring row's columns to help debug
+#                             #     if 'Campaign Type' in df.columns:
+#                             #         recurring_rows = df[df['Campaign Type'].isin(['FCR', 'FBR', 'PFCR', 'PFBR'])]
+#                             #         if len(recurring_rows) > 0:
+#                             #             st.write("**First recurring row - all columns with values:**")
+#                             #             first_row = recurring_rows.iloc[0]
+#                             #             non_empty = {k: v for k, v in first_row.items() if pd.notna(v) and str(v).strip() != ''}
+#                             #             st.json(non_empty)
+#                             # else:
+#                             #     st.info("No recurring gift records to debug")
+#                             st.info("Per-row debug log is currently disabled for production.")
                     
                     except Exception as e:
                         st.error(f"Transformation error: {e}")
