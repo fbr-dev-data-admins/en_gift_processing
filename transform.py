@@ -10,6 +10,8 @@ import numpy as np
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import re
+import json
+import os
 from typing import Tuple, List, Dict, Optional
 
 
@@ -92,6 +94,21 @@ class GiftTransformer:
         self.p2p_config_updates = {}  # Track P2P config updates made during transform
         self.cached_gifts = {}  # Cache for gifts fetched from RE API
         self.gifts_cache_debug = {}  # Debug info for cached gifts fetch
+        
+        # Load custom notes config (email -> custom note lookup)
+        self.custom_notes = {}
+        config_path = os.path.join(os.path.dirname(__file__), 'config', 'custom_notes.json')
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r') as f:
+                    raw = f.read()
+                # Strip trailing commas before closing braces/brackets (common JSON5-style issue)
+                raw = re.sub(r',\s*([}\]])', r'\1', raw)
+                self.custom_notes = json.loads(raw)
+                # Normalize keys to lowercase for case-insensitive matching
+                self.custom_notes = {k.lower().strip(): v for k, v in self.custom_notes.items()}
+            except Exception:
+                self.custom_notes = {}
     
     def transform(
         self,
@@ -390,6 +407,17 @@ class GiftTransformer:
             output_df['E-mail'] = df[email_col].fillna('').astype(str).str.strip()
         else:
             output_df['E-mail'] = ''
+        
+        # Apply custom notes: append note to Constituent ID if email matches custom_notes config
+        if self.custom_notes:
+            for idx in output_df.index:
+                email_val = str(output_df.at[idx, 'E-mail']).lower().strip()
+                if email_val and email_val in self.custom_notes:
+                    note_entry = self.custom_notes[email_val]
+                    custom_note = note_entry.get('Custom Note', '') if isinstance(note_entry, dict) else str(note_entry)
+                    if custom_note:
+                        current_id = str(output_df.at[idx, 'Constituent ID'])
+                        output_df.at[idx, 'Constituent ID'] = f"{current_id} ~ {custom_note}" if current_id else f" ~ {custom_note}"
         
         # Cell: Mobile Number with +1 removed - try multiple column names
         cell_col = None
