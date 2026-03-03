@@ -10,8 +10,6 @@ import numpy as np
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import re
-import json
-import os
 from typing import Tuple, List, Dict, Optional
 
 
@@ -87,22 +85,6 @@ class GiftTransformer:
         
         return val_str
     
-    def _load_custom_notes(self) -> dict:
-        """Load custom notes config from file, handling trailing-comma JSON."""
-        config_path = os.path.join(os.path.dirname(__file__), 'config', 'custom_notes.json')
-        if not os.path.exists(config_path):
-            return {}
-        try:
-            with open(config_path, 'r') as f:
-                raw = f.read()
-            # Strip trailing commas before closing braces/brackets (common JSON5-style issue)
-            raw = re.sub(r',\s*([}\]])', r'\1', raw)
-            notes = json.loads(raw)
-            # Normalize keys to lowercase for case-insensitive matching
-            return {k.lower().strip(): v for k, v in notes.items()}
-        except Exception:
-            return {}
-
     def __init__(self):
         self.exceptions = []
         self.p2p_pending = []
@@ -110,6 +92,7 @@ class GiftTransformer:
         self.p2p_config_updates = {}  # Track P2P config updates made during transform
         self.cached_gifts = {}  # Cache for gifts fetched from RE API
         self.gifts_cache_debug = {}  # Debug info for cached gifts fetch
+        self.custom_notes = {}  # Populated at transform() time from passed-in config
     
     def transform(
         self,
@@ -118,7 +101,8 @@ class GiftTransformer:
         p2p_config: dict,
         tribute_df: Optional[pd.DataFrame] = None,
         re_api=None,
-        cached_gifts: Optional[Dict[str, List[Dict]]] = None
+        cached_gifts: Optional[Dict[str, List[Dict]]] = None,
+        custom_notes_config: Optional[dict] = None
     ) -> Tuple[pd.DataFrame, pd.DataFrame, List[dict]]:
         """
         Main transformation method
@@ -130,6 +114,7 @@ class GiftTransformer:
             tribute_df: Optional tribute records for gift reference
             re_api: RE API client (used for batch gift fetching if cached_gifts not provided)
             cached_gifts: Pre-fetched gifts indexed by constituent ID (avoids per-row API calls)
+            custom_notes_config: Email->note mapping loaded from custom_notes.json
         
         Returns:
             Tuple of (processed_df, exceptions_df, p2p_pending_list)
@@ -141,8 +126,10 @@ class GiftTransformer:
         self.cached_gifts = cached_gifts or {}  # Use provided cache or empty dict
         self.gifts_cache_debug = {}
         
-        # Reload custom notes fresh on every transform (avoids stale session state)
-        self.custom_notes = self._load_custom_notes()
+        # Use passed-in custom notes config (loaded by streamlit app same as other configs)
+        # Normalize email keys to lowercase for case-insensitive matching
+        raw_notes = custom_notes_config or {}
+        self.custom_notes = {k.lower().strip(): v for k, v in raw_notes.items()}
         
         # Create a copy to avoid modifying original
         df = df.copy()
@@ -413,6 +400,7 @@ class GiftTransformer:
             output_df['E-mail'] = ''
         
         # Apply custom notes: append note to Constituent ID if email matches custom_notes config
+        # Uses " % " as delimiter - visible in Excel and safe in SEARCH() unlike ~ which is a wildcard escape
         if self.custom_notes:
             for idx in output_df.index:
                 email_val = str(output_df.at[idx, 'E-mail']).lower().strip()
@@ -421,7 +409,7 @@ class GiftTransformer:
                     custom_note = note_entry.get('Custom Note', '') if isinstance(note_entry, dict) else str(note_entry)
                     if custom_note:
                         current_id = str(output_df.at[idx, 'Constituent ID'])
-                        output_df.at[idx, 'Constituent ID'] = f"{current_id} ~ {custom_note}" if current_id else f" ~ {custom_note}"
+                        output_df.at[idx, 'Constituent ID'] = f"{current_id} % {custom_note}" if current_id else f" % {custom_note}"
         
         # Cell: Mobile Number with +1 removed - try multiple column names
         cell_col = None
