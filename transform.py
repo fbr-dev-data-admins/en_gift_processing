@@ -409,7 +409,7 @@ class GiftTransformer:
                     custom_note = note_entry.get('Custom Note', '') if isinstance(note_entry, dict) else str(note_entry)
                     if custom_note:
                         current_id = str(output_df.at[idx, 'Constituent ID'])
-                        output_df.at[idx, 'Constituent ID'] = f"{current_id} % {custom_note}" if current_id else f" % {custom_note}"
+                        output_df.at[idx, 'Constituent ID'] = f"{current_id}% {custom_note}" if current_id else f"% {custom_note}"
         
         # Cell: Mobile Number with +1 removed - try multiple column names
         cell_col = None
