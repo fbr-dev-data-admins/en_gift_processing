@@ -496,13 +496,42 @@ class GiftTransformer:
         # Key Indicator: Always "I" for individual (manual review needed for organizations)
         output_df['Key Indicator'] = 'I'
         
-        # For QCB records, clear all non-biographical columns
+        # For QCB records, clear all non-biographical columns.
+        # Only keep a QCB row as a standalone row if the supporter has NO surviving gift rows.
+        # If the supporter has gift rows, the Requests no email? value is already propagated
+        # to those rows via qcb_lookup above, so the QCB row itself is redundant and dropped.
         qcb_indices = set()
         if 'Campaign Type' in df.columns:
             qcb_indices = set(df[df['Campaign Type'] == 'QCB'].index)
+
+            # Collect Supporter IDs that have at least one surviving non-QCB row
+            non_qcb_mask = df['Campaign Type'] != 'QCB'
+            supporter_ids_with_gifts = set(
+                df.loc[non_qcb_mask, 'Supporter ID'].astype(str).str.strip().unique()
+            ) if 'Supporter ID' in df.columns else set()
+
+            # Partition QCB indices: suppress those whose supporter already has a gift row
+            qcb_indices_to_drop = set()
+            if 'Supporter ID' in df.columns:
+                for idx in qcb_indices:
+                    sid = str(df.loc[idx, 'Supporter ID']).strip()
+                    if sid and sid in supporter_ids_with_gifts:
+                        qcb_indices_to_drop.add(idx)
+
+            surviving_qcb_indices = qcb_indices - qcb_indices_to_drop
+
+            # Clear non-biographical columns on surviving (standalone) QCB rows
             for col in output_df.columns:
                 if col not in self.QCB_COLUMNS:
-                    output_df.loc[list(qcb_indices), col] = ''
+                    output_df.loc[list(surviving_qcb_indices), col] = ''
+
+            # Drop suppressed QCB rows entirely
+            if qcb_indices_to_drop:
+                output_df = output_df.drop(index=list(qcb_indices_to_drop))
+                df = df.drop(index=list(qcb_indices_to_drop))
+
+            # Update qcb_indices to only surviving rows (used by the sort below)
+            qcb_indices = surviving_qcb_indices
         
         # Format dates to mm/dd/yyyy
         date_columns = ['Gift Date', 'GL Post Date', 'Monthly Donor Status Date', 'Monthly Donor Anniversary Date']
@@ -805,23 +834,6 @@ class GiftTransformer:
                 re_id_col_found = col_name
                 break
         
-        # Initialize debug entry
-        # debug_entry = {
-        #     'EN Transaction ID': en_txn_id,
-        #     'Campaign Type': campaign_type,
-        #     'Campaign Date (raw)': campaign_date_str,
-        #     'Campaign Data 16 (raw)': data_16_str,
-        #     'Parsed Campaign Date': str(campaign_date) if campaign_date else 'PARSE FAILED',
-        #     'Parsed Data 16': str(data_16_date) if data_16_date else 'PARSE FAILED',
-        #     'Is New Recurring': is_new_recurring,
-        #     'RE System Record ID': re_system_id if re_system_id else '(empty)',
-        #     'RE ID Column Found': re_id_col_found,
-        #     'RE API Available': bool(re_api),
-        #     'RE API Authenticated': re_api.is_authenticated() if re_api else False,
-        #     'RE API Called': False,
-        #     'Gifts Last Month Result': ''
-        # }
-        
         if is_new_recurring and campaign_date is not None:
             # New recurring gift - populate all monthly donor fields
             status = 'Active'
@@ -831,7 +843,6 @@ class GiftTransformer:
             statement_type = 'Emailed'
             channel = 'Digital - Recurring'
             gifts_last_month = ''
-            # debug_entry['Gifts Last Month Result'] = '(New recurring - no lookup needed)'
         else:
             # Existing recurring gift - need to look up previous month's gifts
             status = ''
@@ -850,12 +861,7 @@ class GiftTransformer:
                 campaign_date is not None
             )
             
-            # debug_entry['Can Lookup Cached'] = can_lookup
-            # debug_entry['Cached Gifts Available'] = bool(self.cached_gifts)
-            # debug_entry['Cached Constituents Count'] = len(self.cached_gifts) if self.cached_gifts else 0
-            
             if can_lookup:
-                # debug_entry['Using Cached Gifts'] = True
                 try:
                     # Calculate the day to look for in previous month
                     gift_day = campaign_date.day
@@ -881,25 +887,14 @@ class GiftTransformer:
                     
                     target_dates = [f"{prev_year}-{prev_month:02d}-{d:02d}" for d in days_to_check]
                     
-                    # debug_entry['Gift Day'] = gift_day
-                    # debug_entry['Days to Check'] = days_to_check
-                    # debug_entry['Previous Month/Year'] = f"{prev_month}/{prev_year}"
-                    # debug_entry['Days in Prev Month'] = days_in_prev_month
-                    # debug_entry['Target Dates'] = target_dates
-                    
                     # Look up gifts from cache
                     constituent_gifts = self.cached_gifts.get(re_system_id, [])
-                    # debug_entry['Constituent Found in Cache'] = re_system_id in self.cached_gifts
-                    # debug_entry['Total Gifts for Constituent'] = len(constituent_gifts)
                     
                     # Filter to target dates
                     gifts_found = [
                         g for g in constituent_gifts 
                         if g.get('date', '') in target_dates
                     ]
-                    
-                    # debug_entry['Filtered Gifts Count'] = len(gifts_found)
-                    # debug_entry['Gifts Found Object'] = str(gifts_found)[:200] if gifts_found else 'None/Empty'
                     
                     if gifts_found and len(gifts_found) > 0:
                         # Get current transaction gift amount for comparison
@@ -931,33 +926,11 @@ class GiftTransformer:
                             gift_strings.append(f"{gift_date} - ${gift_amount}{amount_check}")
                         
                         gifts_last_month = '\n'.join(gift_strings)
-                        # debug_entry['Gifts Last Month Result'] = f"✅ Found {len(gifts_found)} gifts"
-                        # debug_entry['Formatted Gift Strings'] = gift_strings
                     else:
                         gifts_last_month = 'CHECK'
-                        # debug_entry['Gifts Last Month Result'] = '⚠️ No gifts found in cache for target dates - CHECK'
                         
                 except Exception as e:
-                    import traceback
-                    # debug_entry['Cache Lookup Exception'] = str(e)
-                    # debug_entry['Cache Lookup Exception Type'] = type(e).__name__
-                    # debug_entry['Cache Lookup Traceback'] = traceback.format_exc()
-                    # debug_entry['Gifts Last Month Result'] = f'❌ Cache Lookup Error: {str(e)[:100]}'
                     gifts_last_month = 'CHECK'
-            else:
-                # Log detailed reason why we couldn't look up
-                reasons = []
-                if not self.cached_gifts:
-                    reasons.append('No cached gifts available (RE API batch fetch may have failed or not been run)')
-                if not re_system_id or re_system_id == 'nan':
-                    reasons.append(f'No RE System Record ID (value: "{re_system_id}")')
-                if campaign_date is None:
-                    reasons.append(f'Campaign Date parse failed (raw: "{campaign_date_str}")')
-                
-                # debug_entry['Lookup Not Possible Reasons'] = reasons
-                # debug_entry['Gifts Last Month Result'] = f'⚠️ Cannot lookup: {"; ".join(reasons)}'
-        
-        # self.debug_log.append(debug_entry)
         
         return (status, status_date, anniversary_desc, anniversary_date, 
                 statement_type, channel, payment_method, region, gifts_last_month)
