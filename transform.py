@@ -622,7 +622,7 @@ class GiftTransformer:
         that aren't already in P2P config will be added to pending list for
         manual matching by the user.
         """
-        campaign_number = str(row.get('Campaign Number', ''))
+        campaign_number = self._clean_id(row.get('Campaign Number', ''))
         
         # Skip if already in P2P config
         if campaign_number in p2p_config:
@@ -973,7 +973,7 @@ class GiftTransformer:
         page_name = self.FUNDRAISING_PAGE_MAPPING.get(data_15, '')
         
         # EN Campaign ID = Campaign Number
-        campaign_number = str(row.get('Campaign Number', ''))
+        campaign_number = self._clean_id(row.get('Campaign Number', ''))
         
         # Look up in P2P config for EN Campaign Name and Solicitor
         campaign_name = ''
