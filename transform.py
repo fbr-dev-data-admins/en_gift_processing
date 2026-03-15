@@ -616,11 +616,10 @@ class GiftTransformer:
             return pd.Series([''] * len(df), index=df.index)
     
     def _handle_pftc_record(self, row: pd.Series, p2p_config: dict, re_api, row_number: int = None) -> None:
-        """Handle PFTC (P2P page creator) records for solicitor matching
+        """Handle PFTC (P2P page creator) records for solicitor matching.
         
-        Note: No longer makes RE API calls for auto-matching. All PFTC records
-        that aren't already in P2P config will be added to pending list for
-        manual matching by the user.
+        All PFTC records not already in P2P config are added to the pending
+        list for manual matching by the user in Tab 3.
         """
         campaign_number = self._clean_id(row.get('Campaign Number', ''))
         
@@ -642,9 +641,16 @@ class GiftTransformer:
         campaign_data_10 = str(row.get('Campaign Data 10', ''))  # EN Campaign Name
         campaign_data_11 = str(row.get('Campaign Data 11', ''))  # Email
         
-        # No longer making RE API calls for P2P matching
-        # All unmatched records go to pending list for manual matching
         re_match = None
+        
+        # Write into p2p_config in-memory so gift rows (PFCS/PFCR/etc.) for this
+        # campaign can look up the name. Solicitor left blank until user assigns in Tab 3.
+        if campaign_number:
+            p2p_config[campaign_number] = {
+                'EN Campaign Name': campaign_data_10,
+                'Solicitor': ''
+            }
+            self.p2p_config_updates[campaign_number] = p2p_config[campaign_number]
         
         # Add to pending list for manual matching
         self.p2p_pending.append({
@@ -972,7 +978,7 @@ class GiftTransformer:
         # EN Fundraising Page Name from mapping
         page_name = self.FUNDRAISING_PAGE_MAPPING.get(data_15, '')
         
-        # EN Campaign ID = Campaign Number
+        # EN Campaign ID = Campaign Number (clean to remove .0 from float representation)
         campaign_number = self._clean_id(row.get('Campaign Number', ''))
         
         # Look up in P2P config for EN Campaign Name and Solicitor
