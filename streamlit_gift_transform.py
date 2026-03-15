@@ -83,6 +83,33 @@ def load_json_config(filepath: str) -> dict:
     return {}
 
 
+def load_text_list_config(filepath: str) -> list:
+    """Load a plain-text config file where each line is one entry (e.g. an email address)"""
+    if os.path.exists(filepath):
+        with open(filepath, 'r') as f:
+            return [line.strip().lower() for line in f if line.strip()]
+    return []
+
+
+def load_text_list_from_github(repo_url: str, file_path: str) -> list:
+    """Load a plain-text (one entry per line) file from a GitHub repository."""
+    if "github.com" in repo_url:
+        parts = repo_url.rstrip('/').split('/')
+        owner = parts[-2]
+        repo = parts[-1].replace('.git', '')
+        raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/main/{file_path}"
+    else:
+        raw_url = repo_url
+
+    try:
+        response = requests.get(raw_url, timeout=10)
+        response.raise_for_status()
+        return [line.strip().lower() for line in response.text.splitlines() if line.strip()]
+    except requests.exceptions.RequestException as e:
+        st.warning(f"Could not load {file_path} from GitHub: {e}")
+        return []
+
+
 def save_json_config(filepath: str, data: dict):
     """Save JSON configuration file"""
     with open(filepath, 'w') as f:
@@ -461,20 +488,25 @@ if check_password():
     github_repo = st.secrets.get("github", {}).get("config_repo", "")
     github_token = st.secrets.get("github", {}).get("access_token", "")
     
+    md_acks_path = "config/md_acks.txt"
+
     if github_repo:
         # Load from GitHub
         if 'mapping_config' not in st.session_state or st.sidebar.button("🔄 Reload GitHub Configs"):
             st.session_state.mapping_config = load_config_from_github(github_repo, "config/mapping.json")
             st.session_state.p2p_config = load_config_from_github(github_repo, "config/P2P.json")
             st.session_state.custom_notes_config = load_config_from_github(github_repo, "config/custom_notes.json")
+            st.session_state.md_acks_config = load_text_list_from_github(github_repo, "config/md_acks.txt")
         mapping_config = st.session_state.get('mapping_config', {})
         p2p_config = st.session_state.get('p2p_config', {})
         custom_notes_config = st.session_state.get('custom_notes_config', {})
+        md_acks_config = st.session_state.get('md_acks_config', [])
     else:
         # Load from local files
         mapping_config = load_json_config(mapping_path)
         p2p_config = load_json_config(p2p_path)
         custom_notes_config = load_json_config(custom_notes_path)
+        md_acks_config = load_text_list_config(md_acks_path)
     
     # Sidebar for configuration
     with st.sidebar:
@@ -824,7 +856,8 @@ if check_password():
                             tribute_df=tribute_df,
                             re_api=st.session_state.re_api,
                             cached_gifts=cached_gifts,
-                            custom_notes_config=custom_notes_config
+                            custom_notes_config=custom_notes_config,
+                            md_acks=md_acks_config
                         )
                         
                         # P2P config no longer auto-updated (API calls removed)
