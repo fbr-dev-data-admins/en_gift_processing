@@ -102,7 +102,8 @@ class GiftTransformer:
         tribute_df: Optional[pd.DataFrame] = None,
         re_api=None,
         cached_gifts: Optional[Dict[str, List[Dict]]] = None,
-        custom_notes_config: Optional[dict] = None
+        custom_notes_config: Optional[dict] = None,
+        md_acks: Optional[List[str]] = None
     ) -> Tuple[pd.DataFrame, pd.DataFrame, List[dict]]:
         """
         Main transformation method
@@ -115,6 +116,8 @@ class GiftTransformer:
             re_api: RE API client (used for batch gift fetching if cached_gifts not provided)
             cached_gifts: Pre-fetched gifts indexed by constituent ID (avoids per-row API calls)
             custom_notes_config: Email->note mapping loaded from custom_notes.json
+            md_acks: List of email addresses (lowercase) from md_acks.txt; recurring gifts
+                     from these donors receive Letter Code "Monthly Donor Notification"
         
         Returns:
             Tuple of (processed_df, exceptions_df, p2p_pending_list)
@@ -125,6 +128,9 @@ class GiftTransformer:
         self.p2p_config_updates = {}  # Reset P2P config updates
         self.cached_gifts = cached_gifts or {}  # Use provided cache or empty dict
         self.gifts_cache_debug = {}
+        
+        # Normalize md_acks to a set of lowercase emails for fast lookup
+        self.md_acks = set(md_acks) if md_acks else set()
         
         # Use passed-in custom notes config (loaded by streamlit app same as other configs)
         # Normalize email keys to lowercase for case-insensitive matching
@@ -291,6 +297,16 @@ class GiftTransformer:
         # Letter Code: "No Letter" for gift rows (non-QCB)
         # Will be cleared for QCB rows later in the QCB processing section
         output_df['Letter Code'] = 'No Letter'
+        
+        # Override Letter Code to "Monthly Donor Notification" for recurring gifts
+        # from donors whose email appears in md_acks.txt
+        if self.md_acks and 'Campaign Type' in df.columns:
+            for idx in output_df.index:
+                campaign_type = str(df.at[idx, 'Campaign Type']).strip() if 'Campaign Type' in df.columns else ''
+                if campaign_type in self.RECURRING_TYPES:
+                    email_val = str(output_df.at[idx, 'E-mail']).lower().strip()
+                    if email_val and email_val in self.md_acks:
+                        output_df.at[idx, 'Letter Code'] = 'Monthly Donor Notification'
         
         # Engaging Networks ID - clean to remove .0 from float values
         en_id_col = self._safe_column(df, 'Supporter ID')
