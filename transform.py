@@ -298,16 +298,6 @@ class GiftTransformer:
         # Will be cleared for QCB rows later in the QCB processing section
         output_df['Letter Code'] = 'No Letter'
         
-        # Override Letter Code to "Monthly Donor Notification" for recurring gifts
-        # from donors whose email appears in md_acks.txt
-        if self.md_acks and 'Campaign Type' in df.columns:
-            for idx in output_df.index:
-                campaign_type = str(df.at[idx, 'Campaign Type']).strip() if 'Campaign Type' in df.columns else ''
-                if campaign_type in self.RECURRING_TYPES:
-                    email_val = str(output_df.at[idx, 'E-mail']).lower().strip()
-                    if email_val and email_val in self.md_acks:
-                        output_df.at[idx, 'Letter Code'] = 'Monthly Donor Notification'
-        
         # Engaging Networks ID - clean to remove .0 from float values
         en_id_col = self._safe_column(df, 'Supporter ID')
         output_df['Engaging Networks ID'] = en_id_col.apply(self._clean_id)
@@ -426,6 +416,16 @@ class GiftTransformer:
                     if custom_note:
                         current_id = str(output_df.at[idx, 'Constituent ID'])
                         output_df.at[idx, 'Constituent ID'] = f"{current_id}% {custom_note}" if current_id else f"% {custom_note}"
+        
+        # Override Letter Code to "Monthly Donor Notification" for recurring gifts
+        # from donors whose email appears in md_acks.txt
+        if self.md_acks and 'Campaign Type' in df.columns:
+            for idx in output_df.index:
+                campaign_type = str(df.at[idx, 'Campaign Type']).strip()
+                if campaign_type in self.RECURRING_TYPES:
+                    email_val = str(output_df.at[idx, 'E-mail']).lower().strip()
+                    if email_val and email_val in self.md_acks:
+                        output_df.at[idx, 'Letter Code'] = 'Monthly Donor Notification'
         
         # Cell: Mobile Number with +1 removed - try multiple column names
         cell_col = None
