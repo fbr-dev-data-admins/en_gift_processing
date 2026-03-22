@@ -11,6 +11,9 @@
   "robin.slover@gmail.com" {
     "Custom Note": "one recurring donation each month coded as A/R Pass-Thru to South Park Food Bank A1210-1"
   },
+  "example@gmail.com" {
+    "Custom Note": "this is my example note"
+  },
   "PLACEHOLDER **DO NOT REMOVE**" {
     "Custom Note": "copy the template at the top starting with \"EMAIL_ADDRESS\" and ending with }, (3 lines) then paste on a new line after the last }, above this placeholder, replacing the email and custom note. make sure indentation and formatting is maintained"
   }
