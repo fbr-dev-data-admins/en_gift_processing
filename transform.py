@@ -980,6 +980,11 @@ class GiftTransformer:
         
         # EN Campaign ID = Campaign Number (clean to remove .0 from float representation)
         campaign_number = self._clean_id(row.get('Campaign Number', ''))
+
+        # Handle P2P donations to top-level page
+        if campaign_number in self.FUNDRAISING_PAGE_MAPPING:
+            page_name = self.FUNDRAISING_PAGE_MAPPING.get(campaign_number, '')
+            return (campaign_number, page_name, '', '', '')
         
         # Look up in P2P config for EN Campaign Name and Solicitor
         campaign_name = ''
