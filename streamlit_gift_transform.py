@@ -882,7 +882,7 @@ if check_password():
                         with col3:
                             st.metric("P2P Pending Match", len(p2p_pending))
                         
-                        st.dataframe(processed_df.head(20))
+                        st.dataframe(processed_df, height=400)
                         
                         if exceptions_df is not None and len(exceptions_df) > 0:
                             with st.expander("View Exceptions"):
