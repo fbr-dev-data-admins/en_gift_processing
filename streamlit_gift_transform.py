@@ -408,6 +408,19 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
                     cell.font = Font(bold=True)
                     cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
     
+    daf_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+    # Highlight entire row for DAF gifts (Gift Subtype = Chariot)
+    if 'Gift Subtype' in col_letters:
+        gs_col = col_letters['Gift Subtype']
+        last_col_letter = get_column_letter(len(headers))
+        ws_main.conditional_formatting.add(
+            f'A2:{last_col_letter}{len(df)+1}',
+            FormulaRule(
+                formula=[f'${gs_col}2="Chariot"'],
+                fill=daf_fill
+            )
+        )
+    
     wb.save(output)
     output.seek(0)
     return output

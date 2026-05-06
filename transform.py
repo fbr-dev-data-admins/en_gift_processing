@@ -290,6 +290,10 @@ class GiftTransformer:
         output_df['EN Transaction ID'] = self._safe_column(df, 'EN Transaction ID')
         output_df['Gift Amount'] = self._safe_column(df, 'Campaign Data 4')
         output_df['Receipt Amount'] = self._safe_column(df, 'Campaign Data 4')  # Same as Gift Amount
+        # DAF override: Receipt Amount = 0.00
+        if 'Campaign Data 6' in df.columns:
+            daf_mask = df['Campaign Data 6'].astype(str).str.strip().str.upper() == 'DAF'
+            output_df.loc[daf_mask, 'Receipt Amount'] = '0.00'
         output_df['Gift Date'] = self._safe_column(df, 'Campaign Date')
         output_df['GL Post Date'] = self._safe_column(df, 'Campaign Date')  # Same as Gift Date
         output_df['Stripe Transaction ID'] = self._safe_column(df, 'Campaign Data 2')
@@ -297,6 +301,10 @@ class GiftTransformer:
         # Letter Code: "No Letter" for gift rows (non-QCB)
         # Will be cleared for QCB rows later in the QCB processing section
         output_df['Letter Code'] = 'No Letter'
+        # DAF override: Letter Code = "DAF"
+        if 'Campaign Data 6' in df.columns:
+            daf_mask = df['Campaign Data 6'].astype(str).str.strip().str.upper() == 'DAF'
+            output_df.loc[daf_mask, 'Letter Code'] = 'DAF'
         
         # Engaging Networks ID - clean to remove .0 from float values
         en_id_col = self._safe_column(df, 'Supporter ID')
@@ -474,6 +482,8 @@ class GiftTransformer:
         # American Express if CONTAINS(amex), ACH if CONTAINS(ach) or CONTAINS(debit), Discover if CONTAINS(discover)
         def transform_credit_type(val):
             if pd.isna(val) or str(val).strip() == '':
+                return ''
+            if str(val).strip().upper() == 'DAF':
                 return ''
             val_lower = str(val).lower()
             if 'mastercard' in val_lower:
@@ -761,6 +771,9 @@ class GiftTransformer:
     def _get_gift_subtype(self, row: pd.Series) -> str:
         """Determine gift subtype from Campaign Data 12 and Campaign ID"""
         data_12 = str(row.get('Campaign Data 12', '')).lower()
+        data_6 = str(row.get('Campaign Data 6', '')).strip()
+        if data_6.upper() == 'DAF':
+            return 'Chariot'
         campaign_id = str(row.get('Campaign ID', ''))
         is_wyoming = campaign_id.startswith('Y.')
         
