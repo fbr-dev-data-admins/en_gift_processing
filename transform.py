@@ -546,15 +546,35 @@ class GiftTransformer:
 
             surviving_qcb_indices = qcb_indices - qcb_indices_to_drop
 
+            # Suppress standalone QCB rows that are VolunteerHub records with no RE Constituent ID
+            # These are volunteer-only contacts not yet entered in RE — exclude from import
+            volunteer_sources = {'VolunteerHub', 'VolunteerHub WS'}
+            qcb_volunteer_suppress = set()
+            for idx in list(surviving_qcb_indices):
+                data_source = str(df.loc[idx, 'Data Source']).strip() if 'Data Source' in df.columns else ''
+                re_const_id = str(output_df.loc[idx, 'Constituent ID']).strip()
+                if data_source in volunteer_sources and not re_const_id:
+                    qcb_volunteer_suppress.add(idx)
+                    self.exceptions.append({
+                        'EN Transaction ID': df.loc[idx, 'EN Transaction ID'] if 'EN Transaction ID' in df.columns else '',
+                        'Campaign Type': df.loc[idx, 'Campaign Type'],
+                        'Campaign Status': df.loc[idx, 'Campaign Status'] if 'Campaign Status' in df.columns else '',
+                        'Campaign ID': df.loc[idx, 'Campaign ID'] if 'Campaign ID' in df.columns else '',
+                        'Reason': f'VolunteerHub record with no RE Constituent ID — excluded from import'
+                    })
+
+            surviving_qcb_indices -= qcb_volunteer_suppress
+
             # Clear non-biographical columns on surviving (standalone) QCB rows
             for col in output_df.columns:
                 if col not in self.QCB_COLUMNS:
                     output_df.loc[list(surviving_qcb_indices), col] = ''
 
-            # Drop suppressed QCB rows entirely
-            if qcb_indices_to_drop:
-                output_df = output_df.drop(index=list(qcb_indices_to_drop))
-                df = df.drop(index=list(qcb_indices_to_drop))
+            # Drop suppressed QCB rows entirely (duplicate suppressions + volunteer suppressions)
+            all_qcb_to_drop = qcb_indices_to_drop | qcb_volunteer_suppress
+            if all_qcb_to_drop:
+                output_df = output_df.drop(index=list(all_qcb_to_drop))
+                df = df.drop(index=list(all_qcb_to_drop))
 
             # Update qcb_indices to only surviving rows (used by the sort below)
             qcb_indices = surviving_qcb_indices
