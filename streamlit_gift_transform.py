@@ -198,7 +198,8 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
                 ws_main.cell(row=r_idx, column=c_idx, value=formula)
             
             elif header == 'Nickname' and 'First Name' in col_letters:
-                fn_col  = col_letters['First Name']
+                fn_col = col_letters['First Name']
+                # Formula: =FirstName
                 formula = f'=IF({fn_col}{r_idx}="","",{fn_col}{r_idx})'
                 ws_main.cell(row=r_idx, column=c_idx, value=formula)
             
