@@ -264,7 +264,7 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
             elif header == 'Nickname' and 'First Name' in col_letters:
                 fn_col = col_letters['First Name']
                 # Formula: =FirstName
-                formula = f'={fn_col}{r_idx}'
+                formula = f'=IF({fn_col}{r_idx}="","",{fn_col}{r_idx})'
                 ws_main.cell(row=r_idx, column=c_idx, value=formula)
             
             elif header == 'Spouse Nickname' and 'Spouse First Name' in col_letters:
