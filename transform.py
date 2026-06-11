@@ -685,6 +685,22 @@ class GiftTransformer:
 
             surviving_qcb_indices -= qcb_volunteer_suppress
 
+            # Suppress Programs QCBs with no associated gift row
+            qcb_programs_suppress = set()
+            for idx in list(surviving_qcb_indices):
+                internal_grouping = str(df.loc[idx, 'Internal Grouping']).strip() if 'Internal Grouping' in df.columns else ''
+                if internal_grouping == 'Programs':
+                    qcb_programs_suppress.add(idx)
+                    self.exceptions.append({
+                        'EN Transaction ID': df.loc[idx, 'EN Transaction ID'] if 'EN Transaction ID' in df.columns else '',
+                        'Campaign Type':     df.loc[idx, 'Campaign Type'],
+                        'Campaign Status':   df.loc[idx, 'Campaign Status'] if 'Campaign Status' in df.columns else '',
+                        'Campaign ID':       df.loc[idx, 'Campaign ID']     if 'Campaign ID'     in df.columns else '',
+                        'Reason':            'Programs QCB with no associated gift — excluded from import'
+                    })
+            
+            surviving_qcb_indices -= qcb_programs_suppress
+
             # Deduplicate: keep one QCB row per Supporter ID (earliest Campaign Date)
             qcb_to_drop_dupe = set()
             if 'Supporter ID' in df.columns:
@@ -719,7 +735,7 @@ class GiftTransformer:
                     output_df.loc[list(surviving_qcb_indices), col] = ''
 
             # Drop all suppressed QCB rows
-            all_qcb_to_drop = qcb_indices_to_drop | qcb_volunteer_suppress | qcb_to_drop_dupe
+            all_qcb_to_drop = qcb_indices_to_drop | qcb_volunteer_suppress | qcb_programs_suppress | qcb_to_drop_dupe
             if all_qcb_to_drop:
                 output_df = output_df.drop(index=list(all_qcb_to_drop))
                 df        = df.drop(index=list(all_qcb_to_drop))
