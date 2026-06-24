@@ -412,6 +412,10 @@
     "S.2.2 TSM Chip In Chip Away - WS": {
       "appeal": "WEB",
       "fund": "Ind-U"
+    },
+    "D.2.2 TSM Evergreen Digital - Denver - Test": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
     }
   },
   "MATCH": [
