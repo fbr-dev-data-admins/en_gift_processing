@@ -1,5 +1,5 @@
 {
-  "fiscal_year_designation": "26",
+  "fiscal_year_designation": "27",
   "forms": {
     "D.1.1 Denver Donation Page - Left Aligned": {
       "appeal": "WEB",
@@ -118,95 +118,95 @@
       "fund": "Ind-U"
     },
     "D.2.3 M R Evergreen Search - Colorado": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M R FY25 Fill the Pantries - DEN Mid/Major": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M R FY25 Summer Hunger - DEN": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M R FY25 Summer Hunger - DEN Mid/Major": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M+R Evergreen Lightbox Donation Form - Colorado": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M+R FY25 March Match - DEN": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M+R FY25 March Match - DEN Mid/Major": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "S.2.3 M R FY25 Fill the Pantries - WS": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "S.2.3 M+R FY25 March Match - WS": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "Y.2.3 M R Evergreen Search - Wyoming": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "Y.2.3 M R FY25 Fill the Pantries - WY": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "Y.2.3 M+R FY25 March Match - WY": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M R FY25 Fill the Pantries - DEN": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "S.2.3 M+R FY26 Summer Match - WS": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M+R FY26 Summer Match - DEN Mid/Major": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M+R FY26 Summer Match  - DEN": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M R FY26 Hunger Action Month - DEN": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M R FY26 Hunger Action Month - DEN Mid/Major": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "S.2.3 M+R FY26 Hunger Action Month - WS": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "Y.2.3 M+R FY26 Hunger Action Month - WY": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "Y.2.3 M+R Evergreen Lightbox Donation Form - WY": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "Y.2.3 M R FY26 Hunger Action Month - WY": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "S.2.3 M R FY26 Hunger Action Month - WS": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M R Evergreen Search Ads - Colorado": {
@@ -214,79 +214,79 @@
       "fund": "Ind-U"
     },
     "Y.2.3 M+R FY26 Thanksgiving Campaign - WY": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "S.2.3 M R FY26 Thanksgiving Campaign - WS": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M R Evergreen Display Ads - Colorado": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M R Evergreen CTV Ads - Colorado": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M R Evergreen Meta Ads - Colorado": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M+R FY26 Thanksgiving Campaign - DEN Mid/Major": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M+R FY26 Thanksgiving Campaign - DEN": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "Y.2.3 M R FY26 Thanksgiving Campaign - WY": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M R FY26 Thanksgiving Campaign - DEN Mid/Major": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 M R FY26 Thanksgiving Campaign - DEN - New Created 11.5.25": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "Y.2.3 M R FY26 December Match - WY": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 MR FY26 EOY Campaign - DEN Mid/Major": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 MR FY26 EOY Campaign - DEN": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "S.2.3 MR FY26 EOY Campaign - WS": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 MR FY26 EOY Campaign - DEN Sustainers / New Emergency Donors": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 MR FY26 Sustainer Drive - DEN": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "S.2.3 MR FY26 Sustainer Drive - WS": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "Y.2.3 MR FY26 Sustainer Drive - WY": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 MR FY26 Sustainer Drive - DEN Sustainers": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.1 Direct Mail (RKD) Evergreen Matching Gift Donation Page - Denver": {
@@ -370,51 +370,51 @@
       "fund": "CCDEN-Ind-U"
     },
     "Y.2.3 MR FY26 March Campaign - WY": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 MR FY26 March Campaign - DEN Mid/Major": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "S.2.3 MR FY26 March Campaign - WS": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 MR FY26 March Campaign - DEN": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 MR FY26 Fill the Pantries Campaign - DEN": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "S.2.3 MR FY26 Fill the Pantries Campaign - WS": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 MR FY26 Fill the Pantries Campaign - DEN Mid/Major": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 MR FY26 May Summer Hunger - DEN": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.3 MR FY26 May Summer Hunger - DEN Mid/Major": {
-      "appeal": "WEBMR",
+      "appeal": "WEBTSM",
       "fund": "Ind-u"
     },
     "D.2.2 TSM Evergreen Digital - Denver_-996723923": {
-      "appeal": "WEB",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "S.2.2 TSM Chip In Chip Away - WS": {
-      "appeal": "WEB",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     },
     "D.2.2 TSM Evergreen Digital - Denver - Test": {
-      "appeal": "WEB",
+      "appeal": "WEBTSM",
       "fund": "Ind-U"
     }
   },
