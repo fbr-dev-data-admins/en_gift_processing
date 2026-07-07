@@ -387,9 +387,9 @@ class GiftTransformer:
                 output_df.loc[idx, 'Fund ID']   = ''
                 output_df.loc[idx, 'Package']   = ''
 
-        # Package overrides: utm-source tsm- prefix and Source = newsletter
-        if 'utm-source' in df.columns and 'Source' in df.columns:
-            tsm_mask = df['utm-source'].astype(str).str.strip().str.startswith('tsm-', na=False)
+        # Package overrides: utm_source tsm- prefix and Source = newsletter
+        if 'utm_source' in df.columns and 'Source' in df.columns:
+            tsm_mask = df['utm_source'].astype(str).str.strip().str.startswith('tsm-', na=False)
             output_df.loc[tsm_mask, 'Package'] = df.loc[tsm_mask, 'Source']
 
         if 'Source' in df.columns:
