@@ -33,6 +33,15 @@ class GiftTransformer:
         '1068': 'Western Slope - Food Bank of the Rockies Virtual Food Drives',
         '1067': 'Wyoming - Food Bank of the Rockies Virtual Food Drives'
     }
+
+    # ZIP prefixes for WSlope
+    WSLOPE_REGION_ZIP_PREFIXES = [
+        '814', '815', '816',
+        '80423', '80424', '80426', '80428', '80429', '80435', '80443',
+        '80461', '80463', '80467', '80469', '80477', '80478', '80479',
+        '80483', '80487', '80488', '80497', '80498',
+        '81220', '81251', '81325'
+    ]
     
     # Column order for output
     COLUMN_ORDER = [
@@ -988,6 +997,24 @@ class GiftTransformer:
         branch     = self._get_branch(row)
         region_map = {'Main': 'Denver', 'WSlope': 'Western Slope', 'Wyoming': 'Wyoming'}
         region     = region_map.get(branch, '')
+
+        # Denver-form reassignment: check State first, then ZIP prefix
+        if branch == 'Main':
+            state_val = str(row.get('State', '')).strip().upper()
+            if state_val in ('WY', 'WYOMING'):
+                region = 'Wyoming'
+            else:
+                zip_val = ''
+                for zc in ['ZIP Code', 'ZIP', 'Zip', 'zip', 'Postal Code', 'PostalCode', 'Zip Code', 'ZipCode']:
+                    if zc in row.index:
+                        v = row.get(zc, '')
+                        if pd.notna(v):
+                            candidate = str(v).strip()
+                            if candidate:
+                                zip_val = candidate
+                                break
+                if zip_val and any(zip_val.startswith(p) for p in self.WSLOPE_REGION_ZIP_PREFIXES):
+                    region = 'Western Slope'
         
         if campaign_type in ['FCR', 'PFCR']:
             payment_method = 'Credit Card/Electronic'
