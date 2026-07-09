@@ -405,6 +405,10 @@ class GiftTransformer:
             newsletter_mask = df['Source'].astype(str).str.strip().str.lower() == 'newsletter'
             output_df.loc[newsletter_mask, 'Package'] = 'NEWS'
         
+        # Package override: DOL26G1D01 -> 27OL14L06
+        dol_mask = output_df['Package'].astype(str).str.strip() == 'DOL26G1D01'
+        output_df.loc[dol_mask, 'Package'] = '27OL14L06'
+        
         # Gift Subtype
         output_df['Gift Subtype'] = df.apply(self._get_gift_subtype, axis=1)
         
