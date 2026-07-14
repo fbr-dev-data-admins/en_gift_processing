@@ -17,6 +17,12 @@
    "georgebcurtis@gmail.com": {
     "Custom Note": "Link to FY27 Proposal"
   },
+   "mlbmail@yahoo.com": {
+    "Custom Note": "Verify if gift should be coded as monthly CCDEN payment"
+  },
+   "marenwood@gmail.com": {
+    "Custom Note": "Two mon. gifts. One should stay on her record coded as ind-u. One needs to land on her Corp record Grad Career Success coded as Corp-u"
+  },
   "PLACEHOLDER **DO NOT REMOVE**": {
     "Custom Note": "copy the template at the top starting with \"EMAIL_ADDRESS\" and ending with }, (3 lines) then paste on a new line after the last }, above this placeholder, replacing the email and custom note. make sure indentation and formatting is maintained"
   }
