@@ -26,6 +26,9 @@
    "joywatson@me.com": {
     "Custom Note": "change gift subtype to Stripe EN-CO instead of Stripe EN-WY"
   },
+   "remy@dteworld.com": {
+    "Custom Note": "Dorothy Remy / Frasier Meadows should be coded to Corp and be put on Frasier Meadows record with soft crediting Dorothy Remy."
+  },
   "PLACEHOLDER **DO NOT REMOVE**": {
     "Custom Note": "copy the template at the top starting with \"EMAIL_ADDRESS\" and ending with }, (3 lines) then paste on a new line after the last }, above this placeholder, replacing the email and custom note. make sure indentation and formatting is maintained"
   }
