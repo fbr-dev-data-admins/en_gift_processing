@@ -432,13 +432,18 @@
     "D.2.2 TSM FY27 August FFK - Denver": {
       "appeal": "WEBTSM",
       "fund": "Ind-U"
+    },
+    "Y.2.2 TSM FY27 Evergreen Digital - WY": {
+      "appeal": "WEBTSM",
+      "fund": "Ind-U"
     }
   },
   "MATCH": [
     "Example Form Name",
     "Example Form Name 2",
     "D.2.2 TSM FY27 Evergreen Digital - Denver - Test",
-    "D.2.2 TSM FY27 August FFK - Denver"
+    "D.2.2 TSM FY27 August FFK - Denver",
+    "Y.2.2 TSM FY27 Evergreen Digital - WY"
   ],
   "_comments": {
     "fiscal_year_designation": "This value is prepended to all appeal IDs EXCEPT those starting with 'CCDEN'",
