@@ -29,6 +29,8 @@
    "remy@dteworld.com": {
     "Custom Note": "Dorothy Remy / Frasier Meadows should be coded to Corp and be put on Frasier Meadows record with soft crediting Dorothy Remy."
   },
+   "adickman54@gmail.com": {
+    "Custom Note": "Verify if letter code should be Monthly Donor notification. They are giving $50 through their DAF and now want e-mail receipts."
   "PLACEHOLDER **DO NOT REMOVE**": {
     "Custom Note": "copy the template at the top starting with \"EMAIL_ADDRESS\" and ending with }, (3 lines) then paste on a new line after the last }, above this placeholder, replacing the email and custom note. make sure indentation and formatting is maintained"
   }
