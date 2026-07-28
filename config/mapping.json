@@ -464,11 +464,7 @@
   },
   "MATCH": [
     "Example Form Name",
-    "Example Form Name 2",
-    "D.2.2 TSM FY27 Evergreen Digital - Denver - Test",
-    "D.2.2 TSM FY27 August FFK - Denver",
-    "Y.2.2 TSM FY27 Evergreen Digital - WY",
-    "D.2.2 TSM FY27 Evergreen Digital - Denver "
+    "Example Form Name 2"
   ],
   "_comments": {
     "fiscal_year_designation": "This value is prepended to all appeal IDs EXCEPT those starting with 'CCDEN'",
