@@ -588,7 +588,8 @@ if check_password():
                             with col2:
                                 fund = st.text_input(f"Fund for {form_name}", key=f"fund_{form_name}")
                             with col3:
-                                is_match = st.checkbox(f"MATCH package?", key=f"match_{form_name}")
+                                #is_match = st.checkbox(f"MATCH package?", key=f"match_{form_name}")
+                                is_match = False
                             
                             if st.button(f"Save {form_name}", key=f"save_{form_name}"):
                                 if 'forms' not in mapping_config:
