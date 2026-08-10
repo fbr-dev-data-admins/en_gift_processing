@@ -35,6 +35,9 @@
   "carole@relevant-insight.com": {
     "Custom Note": "gifts should land on Relevant Insight record and coded to Corp-u"
   },
+   "leslieb60@breshan.net": {
+    "Custom Note": "confirm that monthly gift lands on Leslie's record, not their spouse, Pam's record"
+      },
      "PLACEHOLDER **DO NOT REMOVE**": {
     "Custom Note": "copy the template at the top starting with \"EMAIL_ADDRESS\" and ending with }, (3 lines) then paste on a new line after the last }, above this placeholder, replacing the email and custom note. make sure indentation and formatting is maintained"
   }
