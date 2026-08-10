@@ -404,6 +404,11 @@ class GiftTransformer:
         if 'Source' in df.columns:
             newsletter_mask = df['Source'].astype(str).str.strip().str.lower() == 'newsletter'
             output_df.loc[newsletter_mask, 'Package'] = 'NEWS'
+            
+        # Package override: Source begins with 26OL or 27OL
+        if 'Source' in df.columns:
+            olcode_mask = df['Source'].astype(str).str.strip().str.startswith(('26OL', '27OL'), na=False)
+            output_df.loc[olcode_mask, 'Package'] = df.loc[olcode_mask, 'Source']
         
         # Package override: DOL26G1D01 -> 27OL14L06
         dol_mask = output_df['Package'].astype(str).str.strip() == 'DOL26G1D01'
