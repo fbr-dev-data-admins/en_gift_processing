@@ -484,6 +484,10 @@
     "D.2.2 TSM FY27 September HAM - Denver": {
       "appeal": "WEBTSM",
       "fund": "Ind-U"
+    },
+    "Y.2.2 TSM FY27 HAM Affirmation - WY": {
+      "appeal": "WEBTSM",
+      "fund": "Ind-U"
     }
   },
   "MATCH": [
