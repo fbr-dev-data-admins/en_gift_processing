@@ -476,6 +476,10 @@
     "S.2.2 TSM FY27 HAM Affirmation - WS": {
       "appeal": "WEBTSM",
       "fund": "Ind-U"
+    },
+    "D.2.2 TSM FY27 HAM Affirmation - Denver": {
+      "appeal": "WEBTSM",
+      "fund": "Ind-U"
     }
   },
   "MATCH": [
