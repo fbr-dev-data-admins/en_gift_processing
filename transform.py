@@ -413,6 +413,11 @@ class GiftTransformer:
         # Package override: DOL26G1D01 -> 27OL14L06
         dol_mask = output_df['Package'].astype(str).str.strip() == 'DOL26G1D01'
         output_df.loc[dol_mask, 'Package'] = '27OL14L06'
+
+        # Package override: form name contains "Snap Anniversary Match" -> SNAP
+        if 'Campaign ID' in df.columns:
+            snap_mask = df['Campaign ID'].astype(str).str.contains('Snap Anniversary Match', case=False, na=False)
+            output_df.loc[snap_mask, 'Package'] = 'SNAP'
         
         # Gift Subtype
         output_df['Gift Subtype'] = df.apply(self._get_gift_subtype, axis=1)
