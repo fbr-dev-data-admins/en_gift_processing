@@ -516,6 +516,10 @@
     "D.7.1 Denver SNAP Anniversary Match": {
       "appeal": "WEB",
       "fund": "SNAPMATCH"
+    },
+    "D.2.2 TSM FY27 PATT - Denver": {
+      "appeal": "WEBTSM",
+      "fund": "27OL41DE01"
     }
   },
   "MATCH": [
