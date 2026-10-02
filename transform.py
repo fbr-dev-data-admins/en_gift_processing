@@ -417,7 +417,7 @@ class GiftTransformer:
         # Package override: form name contains "Snap Anniversary Match" -> SNAP
         if 'Campaign ID' in df.columns:
             snap_mask = df['Campaign ID'].astype(str).str.contains('Snap Anniversary Match', case=False, na=False)
-            output_df.loc[snap_mask, 'Package'] = 'SNAP'
+            output_df.loc[snap_mask, 'Package'] = 'SNAPMATCH'
         
         # Gift Subtype
         output_df['Gift Subtype'] = df.apply(self._get_gift_subtype, axis=1)
