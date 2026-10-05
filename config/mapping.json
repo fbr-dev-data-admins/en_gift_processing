@@ -528,6 +528,10 @@
     "S.2.2 TSM FY27 PATT - WS": {
       "appeal": "WEBTSM",
       "fund": "Ind-U"
+    },
+    "Y.2.2 TSM FY27 PATT - WY": {
+      "appeal": "WEB",
+      "fund": "Ind-U"
     }
   },
   "MATCH": [
