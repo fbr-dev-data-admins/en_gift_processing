@@ -74,6 +74,70 @@ class GiftTransformer:
         'Email Fundraising Consent Statement', 'Email Newsletter Consent',
         'Email Newsletter Consent Statement', 'SMS Channel Response', 'SMS Consent Statement'
     ]
+
+    def _get_assigned_region(self, row: pd.Series) -> str:
+        """Same region logic as monthly donor fields: branch, then WY state / WSlope ZIP reassignment for Denver forms."""
+        branch = self._get_branch(row)
+        region = {'Main': 'Denver', 'WSlope': 'Western Slope', 'Wyoming': 'Wyoming'}.get(branch, '')
+        if branch == 'Main':
+            if str(row.get('State', '')).strip().upper() in ('WY', 'WYOMING'):
+                region = 'Wyoming'
+            else:
+                for zc in ['ZIP Code', 'ZIP', 'Zip', 'zip', 'Postal Code', 'PostalCode', 'Zip Code', 'ZipCode']:
+                    if zc in row.index and pd.notna(row.get(zc)) and str(row.get(zc)).strip():
+                        z = str(row.get(zc)).strip()
+                        if any(z.startswith(p) for p in self.WSLOPE_REGION_ZIP_PREFIXES):
+                            region = 'Western Slope'
+                        break
+        return region
+    
+    def _route_suspended_channel(self, row: pd.Series, assigned_region: str) -> str:
+        """Returns 'Denver', 'Wyoming', or 'WSlope'."""
+        region_to_channel = {'Denver': 'Denver', 'Wyoming': 'Wyoming', 'Western Slope': 'WSlope'}
+        if assigned_region in region_to_channel:
+            return region_to_channel[assigned_region]
+        if str(row.get('State', '')).strip().upper() in ('WY', 'WYOMING'):
+            return 'Wyoming'
+        prefix = {'D': 'Denver', 'Y': 'Wyoming', 'S': 'WSlope'}
+        return prefix.get(str(row.get('Campaign ID', '')).strip()[:1].upper(), 'Denver')
+    
+    def _build_suspended_notice(self, row: pd.Series) -> dict:
+        def g(col):
+            v = row.get(col, '')
+            return '' if pd.isna(v) else str(v).strip()
+    
+        email = ''
+        for c in ['Email', 'E-mail', 'Supporter Email', 'Email Address', 'email', 'EmailAddress']:
+            if c in row.index and g(c):
+                email = g(c)
+                break
+    
+        start_raw = g('Campaign Data 16')
+        try:
+            start_date = datetime.strptime(start_raw[:10], '%d/%m/%Y').strftime('%m/%d/%Y')
+        except ValueError:
+            start_date = start_raw
+    
+        region = self._get_assigned_region(row)
+        channel = self._route_suspended_channel(row, region)
+    
+        message = (
+            f"Notice of suspended recurring gift for {g('First Name')} {g('Last Name')} ({email}) "
+            f"with third failure date of {self._format_date(g('Campaign Date'))}\n"
+            f"\n"
+            f"Assigned Region: {region}\n"
+            f"Address Location: {g('City')}, {g('State')}\n"
+            f"Form Name: {g('Campaign ID')}\n"
+            f"\n"
+            f"Gift Amount: {g('Campaign Data 4')}\n"
+            f"Type: {g('Campaign Data 6')}\n"
+            f"Recurring Gift Start Date: {start_date}\n"
+            f"\n"
+            f"Error Message: {g('Campaign Data 3')}\n"
+            f"\n"
+            f"Please react to this message with an emoji once addressed"
+        )
+        return {'EN Transaction ID': g('EN Transaction ID'), 'channel': channel, 'message': message}
     
     def _clean_id(self, val) -> str:
         """Clean an ID value - remove decimal places from floats, handle NaN"""
