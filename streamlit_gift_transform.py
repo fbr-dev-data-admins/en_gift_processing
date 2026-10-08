@@ -746,6 +746,17 @@ if check_password():
                             custom_notes_config=custom_notes_config,
                             md_acks=md_acks_config
                         )
+
+                        if 'sent_suspended_notices' not in st.session_state:
+                            st.session_state.sent_suspended_notices = set()
+                        for n in transformer.suspended_notices:
+                            tid = n['EN Transaction ID']
+                            if tid and tid in st.session_state.sent_suspended_notices:
+                                continue  # don't re-post on re-run
+                            if send_teams_notice(n['channel'], n['message']):
+                                st.session_state.sent_suspended_notices.add(tid)
+                        if transformer.suspended_notices:
+                            st.info(f"{len(transformer.suspended_notices)} suspended recurring gift notice(s) processed.")
                         
                         if transformer.p2p_config_updates:
                             save_config_with_github_sync(p2p_path, p2p_config, github_repo, github_token, "P2P config")
