@@ -968,6 +968,12 @@ class GiftTransformer:
                 'Campaign ID':       df.loc[idx, 'Campaign ID'] if 'Campaign ID' in df.columns else '',
                 'Reason':            'Rejected or Changed Status'
             })
+
+        if 'Campaign Data 10' in df.columns:
+            suspended_mask = exception_mask & (df['Campaign Status'] == 'reject') & \
+                (df['Campaign Data 10'].astype(str).str.strip().str.upper() == 'SUSPENDED')
+            for idx in df[suspended_mask].index:
+                self.suspended_notices.append(self._build_suspended_notice(df.loc[idx]))
         
         pending_paypal_mask = (df['Campaign Status'] == 'pending') & has_paypal
         for idx in df[pending_paypal_mask].index:
