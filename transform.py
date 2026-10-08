@@ -104,6 +104,7 @@ class GiftTransformer:
     def __init__(self):
         self.exceptions = []
         self.p2p_pending = []
+        self.suspended_notices = []
         self.p2p_config_updates = {}
         self.cached_gifts = {}
         self.gifts_cache_debug = {}
@@ -217,25 +218,9 @@ class GiftTransformer:
         custom_notes_config: Optional[dict] = None,
         md_acks: Optional[List[str]] = None
     ) -> Tuple[pd.DataFrame, pd.DataFrame, List[dict]]:
-        """
-        Main transformation method
-        
-        Args:
-            df: Input dataframe from EN
-            mapping_config: Form mappings configuration
-            p2p_config: P2P solicitor configuration
-            tribute_df: Optional tribute records for gift reference
-            re_api: RE API client (used for batch gift fetching if cached_gifts not provided)
-            cached_gifts: Pre-fetched gifts indexed by constituent ID (avoids per-row API calls)
-            custom_notes_config: Email->note mapping loaded from custom_notes.json
-            md_acks: List of email addresses (lowercase) from md_acks.txt; recurring gifts
-                     from these donors receive Letter Code "Monthly Donor Notification"
-        
-        Returns:
-            Tuple of (processed_df, exceptions_df, p2p_pending_list)
-        """
         self.exceptions = []
         self.p2p_pending = []
+        self.suspended_notices = []
         self.p2p_config_updates = {}
         self.cached_gifts = cached_gifts or {}
         self.gifts_cache_debug = {}
