@@ -347,7 +347,6 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
     output.seek(0)
     return output
 
-
 def create_final_import_file(df: pd.DataFrame) -> BytesIO:
     """Create final import file with specified column order"""
     final_columns = [
@@ -389,6 +388,38 @@ def create_final_import_file(df: pd.DataFrame) -> BytesIO:
     output.seek(0)
     return output
 
+def send_teams_notice(channel: str, message: str) -> bool:
+    key = {'Denver': 'denver', 'Wyoming': 'wyoming', 'WSlope': 'wslope'}[channel]
+    url = st.secrets.get("teams_webhooks", {}).get(key, "")
+    if not url:
+        st.warning(f"No Teams webhook configured for {channel}.")
+        return False
+
+    body, prev_blank = [], False
+    for line in message.split("\n"):
+        if not line.strip():
+            prev_blank = True
+            continue
+        body.append({"type": "TextBlock", "text": line, "wrap": True,
+                     "spacing": "Large" if prev_blank else "Small"})
+        prev_blank = False
+
+    payload = {
+        "type": "message",
+        "attachments": [{
+            "contentType": "application/vnd.microsoft.card.adaptive",
+            "content": {
+                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                "type": "AdaptiveCard", "version": "1.4", "body": body
+            }
+        }]
+    }
+    try:
+        r = requests.post(url, json=payload, timeout=10)
+        return r.status_code in (200, 202)
+    except requests.exceptions.RequestException as e:
+        st.warning(f"Teams post to {channel} failed: {e}")
+        return False
 
 # ---------- MAIN APP ----------
 if check_password():
