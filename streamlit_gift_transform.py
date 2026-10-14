@@ -347,7 +347,6 @@ def create_excel_output(df: pd.DataFrame, exceptions_df: pd.DataFrame = None) ->
     output.seek(0)
     return output
 
-
 def create_final_import_file(df: pd.DataFrame) -> BytesIO:
     """Create final import file with specified column order"""
     final_columns = [
@@ -389,6 +388,38 @@ def create_final_import_file(df: pd.DataFrame) -> BytesIO:
     output.seek(0)
     return output
 
+def send_teams_notice(channel: str, message: str) -> bool:
+    key = {'Denver': 'denver', 'Wyoming': 'wyoming', 'WSlope': 'wslope'}[channel]
+    url = st.secrets.get("teams_webhooks", {}).get(key, "")
+    if not url:
+        st.warning(f"No Teams webhook configured for {channel}.")
+        return False
+
+    body, prev_blank = [], False
+    for line in message.split("\n"):
+        if not line.strip():
+            prev_blank = True
+            continue
+        body.append({"type": "TextBlock", "text": line, "wrap": True,
+                     "spacing": "Large" if prev_blank else "Small"})
+        prev_blank = False
+
+    payload = {
+        "type": "message",
+        "attachments": [{
+            "contentType": "application/vnd.microsoft.card.adaptive",
+            "content": {
+                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                "type": "AdaptiveCard", "version": "1.4", "body": body
+            }
+        }]
+    }
+    try:
+        r = requests.post(url, json=payload, timeout=10)
+        return r.status_code in (200, 202)
+    except requests.exceptions.RequestException as e:
+        st.warning(f"Teams post to {channel} failed: {e}")
+        return False
 
 # ---------- MAIN APP ----------
 if check_password():
@@ -715,6 +746,17 @@ if check_password():
                             custom_notes_config=custom_notes_config,
                             md_acks=md_acks_config
                         )
+
+                        if 'sent_suspended_notices' not in st.session_state:
+                            st.session_state.sent_suspended_notices = set()
+                        for n in transformer.suspended_notices:
+                            tid = n['EN Transaction ID']
+                            if tid and tid in st.session_state.sent_suspended_notices:
+                                continue  # don't re-post on re-run
+                            if send_teams_notice(n['channel'], n['message']):
+                                st.session_state.sent_suspended_notices.add(tid)
+                        if transformer.suspended_notices:
+                            st.info(f"{len(transformer.suspended_notices)} suspended recurring gift notice(s) processed.")
                         
                         if transformer.p2p_config_updates:
                             save_config_with_github_sync(p2p_path, p2p_config, github_repo, github_token, "P2P config")
